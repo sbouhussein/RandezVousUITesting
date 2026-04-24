@@ -6,7 +6,7 @@ from appium.options.ios import XCUITestOptions
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from appium.webdriver.common.appiumby import AppiumBy
-from logger_helper import setup_logger
+from helpers.logger_helper import setup_logger
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 logger, execution_log_path = setup_logger(current_dir)

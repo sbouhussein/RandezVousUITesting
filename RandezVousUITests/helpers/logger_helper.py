@@ -1,30 +1,30 @@
 import logging
 import os
-from datetime import datetime
+import threading
+
 
 def setup_logger(project_root):
-    # 1. Create a 'logs' folder if it doesn't exist
     log_dir = os.path.join(project_root, "logs")
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    # 2. Generate a filename based on the current run time
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = os.path.join(log_dir, f"test_run_{timestamp}.log")
+    # Use a fixed name instead of a timestamp to ensure it overwrites
+    log_file = os.path.join(log_dir, "latest_execution.log")
 
-    # 3. Configure the logger
-    logger = logging.getLogger("AppiumTest")
+    logger = logging.getLogger("RandezVousTest")
+    # Clear out any old handlers if the logger was already initialized
+    # (prevents duplicate logs in some IDEs)
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
     logger.setLevel(logging.INFO)
 
-    # Create formatters (making it easier to read)
-    # [TIME] [LEVEL] -> Your Message
     formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] -> %(message)s', datefmt='%H:%M:%S')
 
-    # File Handler (Writes to the folder)
-    file_handler = logging.FileHandler(log_file)
+    # mode='w' tells Python to overwrite the file rather than adding to it
+    file_handler = logging.FileHandler(log_file, mode='w')
     file_handler.setFormatter(formatter)
 
-    # Stream Handler (Prints to PyCharm console)
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(formatter)
 
@@ -32,3 +32,17 @@ def setup_logger(project_root):
     logger.addHandler(stream_handler)
 
     return logger, log_file
+
+
+def log_process_output(process, logger, prefix="[APPIUM]"):
+    """Reads process output in a thread and pipes it to the logger."""
+
+    def reader():
+        for line in iter(process.stdout.readline, ""):
+            if line:
+                logger.info(f"{prefix} {line.strip()}")
+        process.stdout.close()
+
+    thread = threading.Thread(target=reader, daemon=True)
+    thread.start()
+    return thread
