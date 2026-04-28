@@ -1,0 +1,23 @@
+# Logs
+*.log
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+PythonProject/
+
+# Secrets
+private
+private/
+.env
+
+# Claude Code
+.claude/

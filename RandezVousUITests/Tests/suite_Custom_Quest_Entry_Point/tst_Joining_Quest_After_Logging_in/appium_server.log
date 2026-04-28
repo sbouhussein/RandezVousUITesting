@@ -1,6 +1,0 @@
-[38;5;112m[Appium][0m Welcome to Appium v3.2.2 (REV 62387b8f92aa012d48202747fd75c40850e5e261)
-[38;5;112m[Appium][0m Non-default server args:
-[38;5;112m[Appium][0m { loglevel: [32m'info'[39m }
-[38;5;112m[Appium][0m Attempting to load driver xcuitest...
-[38;5;86m[HTTP][0m Could not start REST http interface listener. The requested port may already be in use. Please make sure there is no other instance of this server running already.
-[38;5;112m[Appium][0m Could not configure Appium server. It's possible that a driver or plugin tried to update the server and failed. Original error: listen EADDRINUSE: address already in use 0.0.0.0:4723
