@@ -53,13 +53,13 @@ RandezVousUITesting/
 - Python 3.10+
 - [Appium 2.x](https://appium.io/docs/en/2.0/) (`npm install -g appium`)
 - Appium XCUITest driver (`appium driver install xcuitest`)
-- Xcode + iOS Simulator (iPhone 17 Pro, iOS 26.2)
+- Xcode + iOS Simulator (iPhone 17 Pro, iOS 26.4)
 - RandezVous app installed on the simulator (`sbouhussein.github.io-rvsite.RandezVous`)
 
 ### Install Python dependencies
 
 ```bash
-pip install appium-python-client selenium pytest
+pip install appium-python-client selenium pytest python-dotenv
 ```
 
 ### Configure environment variables
@@ -68,7 +68,34 @@ pip install appium-python-client selenium pytest
 cp .env.example .env
 ```
 
-`.env.example` ships with the default key path — no edits needed unless you move the file.
+`.env.example` ships with placeholder values. You must update `UDID`, `DEVICE_NAME`, and `PLATFORM_VERSION` to match your simulator before running tests.
+
+### Find your iOS simulator info
+
+**List all available simulators:**
+
+```bash
+xcrun simctl list devices available
+```
+
+This prints every simulator grouped by OS version, e.g.:
+
+```
+== iOS 26.4 ==
+    iPhone 17 Pro (02702BB3-0AE0-4167-9651-39F68787A375) (Shutdown)
+```
+
+Set your `.env` values from that output:
+
+| Variable | Where to get it |
+|---|---|
+| `DEVICE_NAME` | The simulator name (e.g. `iPhone 17 Pro`) |
+| `PLATFORM_VERSION` | The iOS version label (e.g. `26.4`) |
+| `UDID` | The UUID in parentheses |
+
+**Alternative — Xcode UI:**
+
+Open Xcode → **Window → Devices and Simulators** → select the **Simulators** tab. The Identifier field is the UDID.
 
 ### Add the Firebase service account key
 

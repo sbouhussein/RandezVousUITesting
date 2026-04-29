@@ -2,16 +2,25 @@ import os
 import time
 import subprocess
 import pytest
+from dotenv import load_dotenv
 from appium import webdriver
 from appium.options.ios import XCUITestOptions
 
-APPIUM_PORT = "4723"
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+
+def _require_env(name: str) -> str:
+    value = os.getenv(name)
+    if not value:
+        raise EnvironmentError(f"Required environment variable '{name}' is not set. See .env.example.")
+    return value
+
+APPIUM_PORT = os.getenv("APPIUM_PORT", "4723")
 APPIUM_SERVER_URL = f"http://127.0.0.1:{APPIUM_PORT}"
-DEVICE_NAME = "iPhone 17 Pro"
-PLATFORM_VERSION = "26.2"
-UDID = "02702BB3-0AE0-4167-9651-39F68787A375"
-RV_BUNDLE_ID = "sbouhussein.github.io-rvsite.RandezVous"
-SAFARI_BUNDLE_ID = "com.apple.mobilesafari"
+DEVICE_NAME = _require_env("DEVICE_NAME")
+PLATFORM_VERSION = _require_env("PLATFORM_VERSION")
+UDID = _require_env("UDID")
+RV_BUNDLE_ID = os.getenv("RV_BUNDLE_ID", "sbouhussein.github.io-rvsite.RandezVous")
+SAFARI_BUNDLE_ID = os.getenv("SAFARI_BUNDLE_ID", "com.apple.mobilesafari")
 
 
 @pytest.fixture(scope="session")
