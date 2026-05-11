@@ -1,9 +1,17 @@
+import pytest
 from helpers.custom_quest_helper import QuestHelper
 from helpers.login_page_helper import WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
 from helpers.sign_in_overlay_helper import SignInOverlayHelper
+from helpers.firebase_cleanup_helper import cleanup_user_data
 
+@pytest.fixture
+def clean_test_user():
+    user_identity = "AutomatedTester"
+    cleanup_user_data(user_identity)
+    yield user_identity
+    cleanup_user_data(user_identity)
 
-def test_enter_custom_quest_on_dashboard(rv_driver_no_reset):
+def test_enter_custom_quest_on_dashboard(rv_driver_no_reset, clean_test_user):
     driver = rv_driver_no_reset
     dashboard = SignInOverlayHelper(driver)
     welcome = WelcomeToQuestHelper(driver)
@@ -18,7 +26,8 @@ def test_enter_custom_quest_on_dashboard(rv_driver_no_reset):
     if welcome.verify_welcome_modal_is_displayed():
         welcome.click_lets_go()
 
-    username_screen.enter_username("AutomationTester")
+    username_screen.enter_username(clean_test_user)
+
     if username_screen.is_join_button_enabled():
         username_screen.click_join_quest()
 
