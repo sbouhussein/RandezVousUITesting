@@ -1,5 +1,7 @@
+import pytest
 from helpers.custom_quest_helper import CustomQuestPage, QuestHelper
 
+@pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
 
 def test_joining_quest_after_logging_in(rv_driver):
     custom_quest = CustomQuestPage(rv_driver)

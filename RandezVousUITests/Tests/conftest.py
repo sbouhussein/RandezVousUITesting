@@ -8,11 +8,18 @@ from appium import webdriver
 from appium.options.ios import XCUITestOptions
 from firebase_admin import credentials
 from pathlib import Path
-
-
+from helpers.firebase_cleanup_helper import cleanup_user_data
+import socket
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "../..", ".env"))
-import socket
+
+APPIUM_PORT = os.getenv("APPIUM_PORT", "4723")
+APPIUM_SERVER_URL = f"http://127.0.0.1:{APPIUM_PORT}"
+DEVICE_NAME = "iPhone 17 Pro"
+PLATFORM_VERSION = "26.2"
+UDID = "02702BB3-0AE0-4167-9651-39F68787A375"
+RV_BUNDLE_ID = os.getenv("RV_BUNDLE_ID", "sbouhussein.github.io-rvsite.RandezVous")
+SAFARI_BUNDLE_ID = os.getenv("SAFARI_BUNDLE_ID", "com.apple.mobilesafari")
 
 
 def is_port_in_use(port):
@@ -59,16 +66,6 @@ def _require_env(name: str) -> str:
     if not value:
         raise EnvironmentError(f"Required environment variable '{name}' is not set. See .env.example.")
     return value
-
-APPIUM_PORT = os.getenv("APPIUM_PORT", "4723")
-APPIUM_SERVER_URL = f"http://127.0.0.1:{APPIUM_PORT}"
-DEVICE_NAME = "iPhone 17 Pro"
-PLATFORM_VERSION = "26.2"
-UDID = "02702BB3-0AE0-4167-9651-39F68787A375"
-RV_BUNDLE_ID = os.getenv("RV_BUNDLE_ID", "sbouhussein.github.io-rvsite.RandezVous")
-SAFARI_BUNDLE_ID = os.getenv("SAFARI_BUNDLE_ID", "com.apple.mobilesafari")
-
-import socket
 
 
 def is_port_in_use(port):
@@ -119,10 +116,12 @@ def _build_options(bundle_id, no_reset=False):
     options.platform_version = PLATFORM_VERSION
     options.udid = UDID
     options.bundle_id = bundle_id
-    options.set_capability("appium:showXcodeLog", False)
+    options.no_reset = no_reset
+    options.set_capability("appium:forceAppLaunch", True)
+    options.set_capability("appium:shouldTerminateApp", True)
     options.set_capability("appium:useNewWDA", False)
-    if no_reset:
-        options.no_reset = True
+    options.set_capability("appium:showXcodeLog", True)
+    options.set_capability("appium:resetKeychain", True)
     return options
 
 
@@ -151,13 +150,45 @@ def safari_driver(appium_server):
 def firebase_init():
     """Initializes Firebase using the verified absolute path."""
     # Based on your screenshot, this is the exact physical path on your Mac
-    key_path = Path("/Users/omar/RandezVousUITesting/private/randezvousbeta-82ea6-firebase-adminsdk-3y9u9-382d940bea.json")
+    key_path = Path("/Users/omar/workspace/RandezVousUITesting/private/randezvousbeta-82ea6-firebase-adminsdk-3y9u9-382d940bea.json")
 
     if not key_path.exists():
         # If this still fails, we will search the whole computer for that file
-        pytest.exit(f"❌ ABSOLUTE PATH FAIL: Is the disk named something other than /Users/omar/? \nTried: {key_path}")
+        pytest.exit(f"ABSOLUTE PATH FAIL: Is the disk named something other than /Users/omar/? \nTried: {key_path}")
 
     if not firebase_admin._apps:
         cred = credentials.Certificate(str(key_path))
         firebase_admin.initialize_app(cred)
-    yield
+
+
+@pytest.fixture(autouse=True)
+def setup_teardown(request,rv_driver):
+    """
+    SETUP: Runs before every test
+    """
+    marker = request.node.get_closest_marker("cleanup")
+    if marker:
+        cleanup_type = marker.kwargs.get("type")
+        identifier = marker.kwargs.get("value")
+
+        if cleanup_type == "username":
+            cleanup_user_data(target_username=identifier)
+        elif cleanup_type == "email":
+            cleanup_user_data(target_email=identifier)
+
+   # print(f"Factory resetting: {RV_BUNDLE_ID}")
+   # try:
+   #     rv_driver.terminate_app(RV_BUNDLE_ID)
+   #     rv_driver.execute_script('mobile: clearApp', {'bundleId': RV_BUNDLE_ID})
+   #     rv_driver.activate_app(RV_BUNDLE_ID)
+   # except Exception as e:
+   #     print(f"App reset failed: {e}")
+
+#work on reset simulator function and run whole suite
+#test core functionality:
+    #make sure we can complete activities and all different validation types: photo submission, honor, location(assert user is outside of radius so they can't click button to complete the quest), trivia, prompt
+        #for each one validate
+    #in admin dashboard create a new quest and have 1 activity of each type. Make sure the user can complete the activity. For non based tests.
+    #do the same as the line above for point based quests
+    #do we want to test all cases at once or seperate?
+    #come up with a strategies
