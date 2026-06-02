@@ -1,5 +1,7 @@
 import pytest
-from helpers.custom_quest_helper import QuestHelper
+
+from helpers import custom_quest_helper
+from helpers.custom_quest_helper import CustomQuestPage
 from helpers.firebase_cleanup_helper import cleanup_user_data
 from helpers.login_page_helper import WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
 
@@ -15,7 +17,7 @@ def test_joining_quest_through_url(safari_driver):
     welcome = WelcomeToQuestHelper(driver)
     username_screen = ChooseUsernameHelper(driver)
     adventure = StartAdventureHelper(driver)
-    quest_helper = QuestHelper(driver)
+    custom_quest_helper = CustomQuestPage(driver)
 
     driver.get(QUEST_URL)
 
@@ -43,4 +45,4 @@ def test_joining_quest_through_url(safari_driver):
     if adventure.verify_start_adventure_page_is_displayed():
         adventure.click_start_adventure()
 
-    quest_helper.click_exit_quest()
+    custom_quest_helper.click_exit_quest()

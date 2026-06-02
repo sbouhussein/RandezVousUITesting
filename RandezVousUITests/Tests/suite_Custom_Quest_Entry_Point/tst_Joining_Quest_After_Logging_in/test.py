@@ -1,15 +1,19 @@
 import pytest
-from helpers.custom_quest_helper import CustomQuestPage, QuestHelper
+
+from helpers.custom_quest_helper import CustomQuestPage
+from helpers.login_page_helper import LoginPageHelper
+from helpers.profile_helper import ProfileHelper
 
 @pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
-
 def test_joining_quest_after_logging_in(rv_driver):
+    email = "oalson123@gmail.com"
+    password = "OmarTest123"
+    quest = "testautomationQuest"
     custom_quest = CustomQuestPage(rv_driver)
-    quest_helper = QuestHelper(rv_driver)
+    login_helper = LoginPageHelper(rv_driver)
+    profile_helper = ProfileHelper(rv_driver)
 
-    quest_helper.navigate_to_quests_tab()
-    quest_helper.click_custom_quest_button()
-    custom_quest.enter_quest_code("testautomationQuest")
-    custom_quest.click_find_quest()
-    custom_quest.click_start_quest()
-    quest_helper.click_exit_quest()
+    login_helper.login_with_credentials(email_text = email, password_text = password)
+    custom_quest.join_custom_quest(quest_code = quest)
+    custom_quest.click_exit_quest()
+    profile_helper.log_out_if_logged_in()

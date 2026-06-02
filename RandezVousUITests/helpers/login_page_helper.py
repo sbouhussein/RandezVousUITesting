@@ -16,6 +16,9 @@ class LoginPageHelper:
     continue_with_google_button = (AppiumBy.ACCESSIBILITY_ID, "Continue with Google")
     login_with_code_button = (AppiumBy.ACCESSIBILITY_ID, "Log in with code")
     skip_authentication_button = (AppiumBy.ACCESSIBILITY_ID, "Skip")
+    email_input_field = (AppiumBy.XPATH, "//XCUIElementTypeTextField[@placeholderValue='Email']")
+    password_input_field = (AppiumBy.CLASS_NAME, "XCUIElementTypeSecureTextField")
+    sign_in_button = (AppiumBy.ACCESSIBILITY_ID, "Sign In")
 
     def verify_login_page_is_displayed(self):
         try:
@@ -39,15 +42,6 @@ class LoginPageHelper:
     def click_skip_authentication(self):
         self.wait.until(EC.element_to_be_clickable(self.skip_authentication_button)).click()
 
-class EmailSignInHelper:
-    def __init__(self, driver):
-        self.driver = driver
-        self.wait = WebDriverWait(self.driver, 15)
-
-    email_input_field = (AppiumBy.XPATH, "//XCUIElementTypeTextField[@placeholderValue='Email']")
-    password_input_field = (AppiumBy.CLASS_NAME, "XCUIElementTypeSecureTextField")
-    sign_in_button = (AppiumBy.ACCESSIBILITY_ID, "Sign Up")
-
     def verify_sign_in_page_is_displayed(self):
         try:
             return self.wait.until(EC.visibility_of_element_located(self.sign_in_button)).is_displayed()
@@ -67,16 +61,16 @@ class EmailSignInHelper:
         field.send_keys(password_text)
 
     def click_sign_in(self):
-        self.wait.until(EC.element_to_be_clickable(self.sign_in_button)).click()
+        sign_in = self.wait.until(EC.element_to_be_clickable(self.sign_in_button))
+        sign_in.click()
 
     def login_with_credentials(self, email_text, password_text):
+        self.click_i_already_have_an_account()
         self.verify_sign_in_page_is_displayed()
         self.enter_email(email_text)
         self.enter_password(password_text + "\n")
         if self.driver.is_keyboard_shown():
             self.driver.hide_keyboard()
-        self.click_sign_in()
-
 
 class WelcomeToQuestHelper:
     def __init__(self, driver):

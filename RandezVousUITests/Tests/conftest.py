@@ -163,18 +163,17 @@ def firebase_init():
 
 @pytest.fixture(autouse=True)
 def setup_teardown(request,rv_driver):
-    """
-    SETUP: Runs before every test
-    """
+    """SETUP: Runs before every test """
     marker = request.node.get_closest_marker("cleanup")
     if marker:
         cleanup_type = marker.kwargs.get("type")
         identifier = marker.kwargs.get("value")
+        score = marker.kwargs.get("score")
 
         if cleanup_type == "username":
-            cleanup_user_data(target_username=identifier)
+            cleanup_user_data(target_username = identifier, target_score = score)
         elif cleanup_type == "email":
-            cleanup_user_data(target_email=identifier)
+            cleanup_user_data(target_email = identifier, target_score = score)
 
    # print(f"Factory resetting: {RV_BUNDLE_ID}")
    # try:
