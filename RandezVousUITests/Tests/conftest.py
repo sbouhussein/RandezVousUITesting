@@ -1,3 +1,4 @@
+import datetime
 import os
 import time
 import subprocess
@@ -191,3 +192,58 @@ def setup_teardown(request,rv_driver):
     #do the same as the line above for point based quests
     #do we want to test all cases at once or seperate?
     #come up with a strategies
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """"Condenses errors when a failure occurs"""
+    outcome = yield
+    report = outcome.get_result()
+
+    if report.when == 'call' and report.failed:
+        driver = item.funcargs.get('rv_driver')
+
+        if driver:
+            print("\n" + "=" * 60)
+            print("🚨 TEST FAILURE DETECTED 🚨")
+            print(f"Test Name: {item.name}")
+            print("-" * 60)
+
+            failed_file = "Unknown"
+            failed_line = "Unknown"
+            error_msg = str(call.excinfo.value) if call.excinfo else "Unknown Error"
+
+            if call.excinfo:
+                for frame in call.excinfo.traceback:
+                    path_str = str(frame.path)
+                    if ".venv" not in path_str and "site-packages" not in path_str:
+                        failed_file = path_str
+                        failed_line = frame.lineno + 1
+
+            print(f"📍 Failed at: {failed_file}:{failed_line}")
+
+            clean_error = error_msg.splitlines()[0] if error_msg else "Unknown"
+            print(f"💥 Error:     {clean_error}")
+            print("-" * 60)
+
+            failures_dir = os.path.join(item.config.rootdir, "failures")
+            os.makedirs(failures_dir, exist_ok=True)
+
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            base_filename = f"{item.name}_{timestamp}"
+
+            screenshot_path = os.path.join(failures_dir, f"{base_filename}.png")
+            try:
+                driver.save_screenshot(screenshot_path)
+                print(f"📸 Screenshot: {screenshot_path}")
+            except Exception as e:
+                print(f"Failed to take screenshot: {e}")
+
+            xml_path = os.path.join(failures_dir, f"{base_filename}.xml")
+            try:
+                with open(xml_path, "w", encoding="utf-8") as f:
+                    f.write(driver.page_source)
+                print(f"📄 DOM State:  {xml_path}")
+            except Exception as e:
+                print(f"Failed to save page source: {e}")
+
+            print("=" * 60 + "\n")

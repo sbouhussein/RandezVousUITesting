@@ -19,7 +19,6 @@ def test_prompt_based_activity(rv_driver):
 
     login_helper.login_with_credentials(email, password)
     custom_quest.join_custom_quest(quest)
-    custom_quest.click_view_requirements()
     custom_quest.complete_prompt_activity(activity, response)
 
     custom_quest.click_exit_quest()

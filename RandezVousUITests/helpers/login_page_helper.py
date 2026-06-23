@@ -90,6 +90,12 @@ class WelcomeToQuestHelper:
         except Exception:
             return False
 
+    def verify_guest_onboarding_is_displayed(self):
+        try:
+            return self.wait.until(EC.visibility_of_element_located(self.guest_onboarding_description_text)).is_displayed()
+        except Exception:
+            return False
+
     def click_lets_go(self):
         self.wait.until(EC.element_to_be_clickable(self.lets_go_button)).click()
 

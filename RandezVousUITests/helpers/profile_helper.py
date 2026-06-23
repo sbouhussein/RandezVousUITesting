@@ -30,15 +30,34 @@ class ProfileHelper:
         print(f"Users score is {actual_score}")
         assert actual_score == expected_score_str, f"Expected score to be 125, but got {actual_score}"
 
-    def log_out_if_logged_in(self, check_score = False, expected_score = None):
-        """Checks if a user is logged in and signs them out to clean the state"""
+    def log_out_if_logged_in(self, check_score=False, expected_score=None):
+        """Checks if a user is logged in, scrolls if necessary, and signs them out."""
         self.navigate_to_profile()
         if check_score:
             self.test_dynamic_score(expected_score)
-        menu=self.wait.until(EC.element_to_be_clickable(self.show_menu_button))
+
+        menu = self.wait.until(EC.element_to_be_clickable(self.show_menu_button))
         menu.click()
+
+        logout_locator = (AppiumBy.ACCESSIBILITY_ID, "Log out")
+
+        try:
+            # Check if visible immediately
+            log_out = self.driver.find_element(*logout_locator)
+            if not log_out.is_displayed():
+                raise Exception("Not visible")
+        except:
+            print("Logout button not visible, scrolling to find it...")
+            # Use a scroll-to-visible approach
+            self.driver.execute_script('mobile: scroll', {
+                'direction': 'down',
+                'element': self.driver.find_element(AppiumBy.CLASS_NAME, "XCUIElementTypeCollectionView").id,
+                'predicateString': 'label == "Log out"'
+            })
+
         log_out = self.wait.until(EC.element_to_be_clickable(self.logout_button))
         log_out.click()
+
         self.wait.until(EC.alert_is_present())
         self.driver.switch_to.alert.accept()
         time.sleep(2)

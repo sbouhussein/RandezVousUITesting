@@ -11,7 +11,7 @@ def test_trivia_based_activity(rv_driver):
     quest = "TestAutomationActivityQuest"
     activity = "Trivia Activity"
     response = "Trivia"
-    score = "125"
+    score = "125" #validate score in  custom leaderboard not profile
 
     custom_quest = CustomQuestPage(rv_driver)
     login_helper = LoginPageHelper(rv_driver)
@@ -19,7 +19,6 @@ def test_trivia_based_activity(rv_driver):
 
     login_helper.login_with_credentials(email, password)
     custom_quest.join_custom_quest(quest)
-    custom_quest.click_view_requirements()
     custom_quest.complete_trivia_activity(activity, response)
 
     custom_quest.click_exit_quest()
