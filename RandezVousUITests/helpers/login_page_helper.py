@@ -1,6 +1,8 @@
 from appium.webdriver.common.appiumby import AppiumBy
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from helpers.profile_helper import ProfileHelper
+from helpers.sign_in_overlay_helper import DashboardOverlay
 
 
 class LoginPageHelper:
@@ -65,12 +67,27 @@ class LoginPageHelper:
         sign_in.click()
 
     def login_with_credentials(self, email_text, password_text):
+        print("Logging in with credentials")
         self.click_i_already_have_an_account()
         self.verify_sign_in_page_is_displayed()
         self.enter_email(email_text)
         self.enter_password(password_text + "\n")
         if self.driver.is_keyboard_shown():
             self.driver.hide_keyboard()
+
+    def login_and_out_to_cleanup(self, email_text, password_text):
+        print("Resetting Simulator")
+
+        profile_help = ProfileHelper(self.driver)
+        dashboard = DashboardOverlay(self.driver)
+
+        dashboard.click_log_in()
+        self.verify_sign_in_page_is_displayed()
+        self.enter_email(email_text)
+        self.enter_password(password_text + "\n")
+        if self.driver.is_keyboard_shown():
+            self.driver.hide_keyboard()
+        profile_help.log_out_if_logged_in()
 
 class WelcomeToQuestHelper:
     def __init__(self, driver):
@@ -92,7 +109,8 @@ class WelcomeToQuestHelper:
 
     def verify_guest_onboarding_is_displayed(self):
         try:
-            return self.wait.until(EC.visibility_of_element_located(self.guest_onboarding_description_text)).is_displayed()
+            return self.wait.until(
+                EC.visibility_of_element_located(self.guest_onboarding_description_text)).is_displayed()
         except Exception:
             return False
 

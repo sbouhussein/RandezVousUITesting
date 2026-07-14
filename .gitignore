@@ -21,3 +21,6 @@ private/
 
 # Claude Code
 .claude/
+
+# Reports
+reports/

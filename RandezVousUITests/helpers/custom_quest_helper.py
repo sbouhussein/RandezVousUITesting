@@ -1,5 +1,4 @@
 import time
-from lib2to3.pgen2 import driver
 
 from appium.webdriver.common.appiumby import AppiumBy
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
@@ -23,12 +22,13 @@ class QuestHelper:
 
     # Quests Page
     quests_header = (AppiumBy.ACCESSIBILITY_ID, "Quests")
-    trophy_button = (AppiumBy.ACCESSIBILITY_ID, "trophy.fill")
+    leaderboard_button = (AppiumBy.ACCESSIBILITY_ID, "trophy.fill")
     active_badge = (AppiumBy.ACCESSIBILITY_ID, "Active")
     custom_quest_button = (AppiumBy.ACCESSIBILITY_ID, "Custom")
     join_quest_page = (AppiumBy.ACCESSIBILITY_ID, "Join a Quest")
 
     def navigate_to_quests_tab(self):
+        print("Navigating to Quests Tab")
         self.wait.until(EC.element_to_be_clickable(self.quests_tab)).click()
         assert self.wait.until(EC.visibility_of_element_located(self.quests_header)).is_displayed(), \
             "Quests page header not visible after clicking tab"
@@ -47,6 +47,30 @@ class QuestHelper:
         except Exception:
             return False
 
+    def click_leaderboard_button(self):
+        self.wait.until(EC.element_to_be_clickable(self.leaderboard_button)).click()
+        print(f"Clicking LeaderBoard Button")
+
+    def check_leaderboard(self, expected_username, expected_score):
+        self.click_leaderboard_button()
+        row_xpath = f'//XCUIElementTypeCell[descendant::XCUIElementTypeStaticText[@name="{expected_username}"]]'
+        print(f"Searching for row belonging to user: '{expected_username}'...")
+
+        parent_cell = WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((AppiumBy.XPATH, row_xpath))
+        )
+
+        text_elements = parent_cell.find_elements(AppiumBy.CLASS_NAME, "XCUIElementTypeStaticText")
+        actual_username = text_elements[0].get_attribute("name")
+        actual_score = text_elements[1].get_attribute("name")
+
+        print(f"Row Found -> Extracted User: '{actual_username}' | Extracted Score: '{actual_score}'")
+
+        assert actual_username == expected_username, f"Username mismatch! Expected '{expected_username}' but found '{actual_username}'"
+        assert actual_score == expected_score, f"Score mismatch for {expected_username}! Expected '{expected_score}' but found '{actual_score}'"
+
+        print(f"Success! Verified score for {actual_username} matches expected value of {actual_score}.")
+        self.navigate_to_quests_tab()
 
 class CustomQuestPage:
     def __init__(self, driver):

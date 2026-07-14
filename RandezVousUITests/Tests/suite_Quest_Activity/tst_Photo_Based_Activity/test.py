@@ -1,10 +1,9 @@
 import pytest
 import os
-from helpers.custom_quest_helper import CustomQuestPage, QuestHelper
+from helpers.custom_quest_helper import CustomQuestPage
 from helpers.login_page_helper import LoginPageHelper
 from helpers.profile_helper import ProfileHelper
 from helpers.media_helper import push_image_to_simulator_gallery, make_image_recent
-
 
 @pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
 def test_photo_based_activity(rv_driver):
@@ -12,7 +11,6 @@ def test_photo_based_activity(rv_driver):
     password = "OmarTest123"
     quest = "TestAutomationActivityQuest"
     activity = "Photo Activity"
-    score = "125"
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
     local_image_path = os.path.join(current_dir, "test_image.jpg")
@@ -28,4 +26,4 @@ def test_photo_based_activity(rv_driver):
     custom_quest.complete_photo_activity(activity)
 
     custom_quest.click_exit_quest()
-    profile_helper.log_out_if_logged_in(check_score=True, expected_score=score)
+    profile_helper.log_out_if_logged_in()

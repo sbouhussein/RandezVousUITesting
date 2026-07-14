@@ -4,14 +4,11 @@ from lib2to3.pgen2 import driver
 from appium.webdriver.common.appiumby import AppiumBy
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from helpers.login_page_helper import LoginPageHelper
 
 class ProfileHelper:
     def __init__(self, driver):
         self.driver = driver
         self.wait = WebDriverWait(self.driver, 10)
-
-    login_page = LoginPageHelper(driver)
 
     profile_header_locator = (AppiumBy.ACCESSIBILITY_ID, "Profile")
     profile_tab = (AppiumBy.ACCESSIBILITY_ID, "person")

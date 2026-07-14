@@ -1,6 +1,6 @@
 import pytest
 
-from helpers.custom_quest_helper import CustomQuestPage, QuestHelper
+from helpers.custom_quest_helper import CustomQuestPage
 from helpers.login_page_helper import LoginPageHelper
 from helpers.profile_helper import ProfileHelper
 
@@ -10,7 +10,6 @@ def test_honor_based_activity(rv_driver):
     password = "OmarTest123"
     quest = "TestAutomationActivityQuest"
     activity = "Honor Code Activity"
-    score = "125"
 
     custom_quest = CustomQuestPage(rv_driver)
     login_helper = LoginPageHelper(rv_driver)
@@ -21,5 +20,5 @@ def test_honor_based_activity(rv_driver):
     custom_quest.complete_honor_based_activity(activity)
 
     custom_quest.click_exit_quest()
-    profile_helper.log_out_if_logged_in(True, score)
+    profile_helper.log_out_if_logged_in()
 

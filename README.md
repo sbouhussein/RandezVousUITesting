@@ -5,6 +5,98 @@ Automated UI test suite for the RandezVous iOS app, built with [Appium](https://
 Future scope includes the RandezVous web app and admin dashboard (`/Users/samibouhussein/RandezVousSite/rvsite`).
 
 ---
+### Prerequisites
+
+- Python 3.10+
+- [Appium 2.x](https://appium.io/docs/en/2.0/) (`npm install -g appium`)
+- Appium XCUITest driver (`appium driver install xcuitest`)
+- Xcode + iOS Simulator (iPhone 17 Pro, iOS 26.4)
+- RandezVous app installed on the simulator (`sbouhussein.github.io-rvsite.RandezVous`)
+
+## Setup
+
+- Download xcuitest which is the ios driver
+  - https://appium.github.io/appium-xcuitest-driver/latest/getting-started/installation/
+  
+- Clone this repo: 
+  - https://github.com/sbouhussein/RandezVousUITesting
+
+- Navigate to the Python Project and run this command: "bash setup.sh"
+  - This will install NVM, Node.js and Appium
+
+- Install Appium Inspector which is used for knowing object names
+  - Run this command: "appium plugin install inspector"
+
+### Installing Pycharm and opening the repo
+
+- Link to Install Pycharm: https://www.jetbrains.com/pycharm/download/?section=mac
+- Open the repo by clicking on File > Open and navigate to the repo in your file explorer
+
+### Running a Test in PyCharm
+
+- Open Xcode with the RandezVous Repo open 
+
+- And click on the play button in order to build and launch the simulator
+
+- Navigate to conftest.py in Pycharm and update these values 
+  - DEVICE_NAME
+  - PLATFORM_VERSION
+  - UDID
+    - Open Xcode.
+    - In the top menu bar, click Window > Devices and Simulators (or press Shift + Command + 2). 
+    - Click on the Simulators tab at the top of the window that appears. 
+    - Select your specific simulator model from the list on the left. 
+    - On the right side, you will see a field labeled Identifier. That is your UDID. You can right-click it to copy it.
+
+- After RandezVous installs on the simulator go to PyCharm and double-click or right-click on the test.py of the test you want run and click Run 'Python tests in test'
+
+### Add the Firebase service account key
+
+The key is not committed. Obtain it from the Firebase console:
+
+> Firebase Console → Project Settings → Service Accounts → Generate new private key
+
+Save the downloaded JSON to:
+
+```
+private/service-account-key.json
+```
+
+This path is gitignored. The `private/` directory is created manually — it is never committed.
+
+### Running a Test on the command line
+
+- Open a terminal and navigate to the project.
+  - ex. cd /Users/omar/PycharmProjects/PythonProject
+  
+- Run this command: "source .venv/bin/activate"
+
+- If you want to run all the tests then run this command: "pytest RandezVousUITests"
+
+- If you want to run only a specific test then you have to type the command above and the directory of where it is located
+  - ex. "pytest RandezVousUITests/Tests/suite_Quest_Activity/tst_Complete_Quest_From_Login/test.py"
+
+- If you want to run it by name then you can run this command and keep the quotes around Name of Test: pytest -k "Name of Test"
+
+- If you want to run all tests then from the same directory above run this command: "pytest RandezVousUITests/Tests/"
+
+### Running a Test headless
+
+- If you don't want to run a test using the simulator, you must specify when running the test on the command line by adding "--headless" at the end of your test directory where the test lives
+  - ex. "pytest RandezVousUITests/Tests/suite_Quest_Activity/tst_Complete_Quest_From_Login/test.py --headless"
+
+  
+### Helpful Pytest Commands & Flags
+
+When running tests from the command line, you can use these flags to customize your test execution and make debugging easier:
+
+- `-s` (Show Prints):** By default, pytest hides your `print()` statements if a test passes. Use this flag to force pytest to print all console logs in real-time.
+- `-v` (Verbose):** Provides a more detailed output in the terminal, listing the exact names of the tests that are passing or failing instead of just showing minimal dots.
+- `--maxfail=1` (Stop on First Failure):** Aborts the entire test run the moment a single test fails. This is incredibly useful for debugging without waiting for a long suite to finish.
+
+- Example Usage:
+To run a test with detailed logging and stop immediately if it fails, combine the flags:
+`pytest -s -v --maxfail=1`
 
 ## Repository Structure
 
@@ -44,93 +136,6 @@ RandezVousUITesting/
             └── tst_log_in_with_code_entry_point/
 ```
 
----
-
-## Setup
-
-### Prerequisites
-
-- Python 3.10+
-- [Appium 2.x](https://appium.io/docs/en/2.0/) (`npm install -g appium`)
-- Appium XCUITest driver (`appium driver install xcuitest`)
-- Xcode + iOS Simulator (iPhone 17 Pro, iOS 26.4)
-- RandezVous app installed on the simulator (`sbouhussein.github.io-rvsite.RandezVous`)
-
-### Install Python dependencies
-
-```bash
-pip install appium-python-client selenium pytest python-dotenv
-```
-
-### Configure environment variables
-
-```bash
-cp .env.example .env
-```
-
-`.env.example` ships with placeholder values. You must update `UDID`, `DEVICE_NAME`, and `PLATFORM_VERSION` to match your simulator before running tests.
-
-### Find your iOS simulator info
-
-**List all available simulators:**
-
-```bash
-xcrun simctl list devices available
-```
-
-This prints every simulator grouped by OS version, e.g.:
-
-```
-== iOS 26.4 ==
-    iPhone 17 Pro (02702BB3-0AE0-4167-9651-39F68787A375) (Shutdown)
-```
-
-Set your `.env` values from that output:
-
-| Variable | Where to get it |
-|---|---|
-| `DEVICE_NAME` | The simulator name (e.g. `iPhone 17 Pro`) |
-| `PLATFORM_VERSION` | The iOS version label (e.g. `26.4`) |
-| `UDID` | The UUID in parentheses |
-
-**Alternative — Xcode UI:**
-
-Open Xcode → **Window → Devices and Simulators** → select the **Simulators** tab. The Identifier field is the UDID.
-
-### Add the Firebase service account key
-
-The key is not committed. Obtain it from the Firebase console:
-
-> Firebase Console → Project Settings → Service Accounts → Generate new private key
-
-Save the downloaded JSON to:
-
-```
-private/service-account-key.json
-```
-
-This path is gitignored. The `private/` directory is created manually — it is never committed.
-
----
-
-## Running Tests
-
-```bash
-cd RandezVousUITests
-pytest
-```
-
-pytest starts an Appium server once for the session, runs all tests, then shuts it down. Appium server logs are written to `logs/appium_server.log` (gitignored).
-
-To run a single suite or test:
-
-```bash
-pytest tests/suite_custom_quest_entry_point/
-pytest tests/suite_custom_quest_entry_point/tst_joining_quest_after_logging_in/
-```
-
----
-
 ## Adding Tests
 
 ### 1. Create the test directory
@@ -157,21 +162,6 @@ Each `test.py` contains one test function named `test_<what_it_tests>`. Use a fi
 | `rv_driver_no_reset` | App must preserve state from a previous session |
 | `safari_driver` | Test starts in Safari (URL deep-link flows) |
 
-```python
-from helpers.custom_quest_helper import CustomQuestPage, QuestHelper
-
-def test_joining_quest_after_logging_in(rv_driver):
-    custom_quest = CustomQuestPage(rv_driver)
-    quest_helper = QuestHelper(rv_driver)
-
-    quest_helper.navigate_to_quests_tab()
-    quest_helper.click_custom_quest_button()
-    custom_quest.enter_quest_code("testautomationQuest")
-    custom_quest.click_find_quest()
-    custom_quest.click_start_quest()
-    quest_helper.click_exit_quest()
-```
-
 ### 3. Add helpers for new screens
 
 Create a new file in `helpers/` named after the screen or feature: `<screen_name>_helper.py`.
@@ -195,20 +185,6 @@ Create a new file in `helpers/` named after the screen or feature: `<screen_name
 ### Helper class structure (Page Object Model)
 
 Each helper class follows three sections in order:
-
-```python
-class MyScreenHelper:
-    def __init__(self, driver):
-        self.driver = driver
-        self.wait = WebDriverWait(self.driver, 10)
-
-    # --- Locators (class-level tuples) ---
-    some_button = (AppiumBy.ACCESSIBILITY_ID, "Button Label")
-
-    # --- Actions ---
-    def click_some_button(self):
-        self.wait.until(EC.element_to_be_clickable(self.some_button)).click()
-```
 
 - Locators are class-level attributes (not `self.` in `__init__`) so they can be inspected without instantiation.
 - Instance state (`driver`, `wait`) is set in `__init__`.

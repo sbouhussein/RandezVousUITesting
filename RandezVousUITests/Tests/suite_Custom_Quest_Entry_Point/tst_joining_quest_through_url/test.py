@@ -3,7 +3,7 @@ import pytest
 from helpers import custom_quest_helper
 from helpers.custom_quest_helper import CustomQuestPage
 from helpers.firebase_cleanup_helper import cleanup_user_data
-from helpers.login_page_helper import WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
+from helpers.login_page_helper import WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper, LoginPageHelper
 
 QUEST_URL = "https://www.randezvous.com/quest/organization/test-3hmYPwC0cFa6zch5syk7/testautomationQuest/onboarding"
 
@@ -18,6 +18,7 @@ def test_joining_quest_through_url(safari_driver):
     username_screen = ChooseUsernameHelper(driver)
     adventure = StartAdventureHelper(driver)
     custom_quest_helper = CustomQuestPage(driver)
+    login_helper = LoginPageHelper(driver)
 
     driver.get(QUEST_URL)
 
@@ -46,3 +47,5 @@ def test_joining_quest_through_url(safari_driver):
         adventure.click_start_adventure()
 
     custom_quest_helper.click_exit_quest()
+    login_helper.login_and_out_to_cleanup(email_text="oalson123@gmail.com", password_text="OmarTest123")
+
