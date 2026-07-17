@@ -17,3 +17,4 @@ def test_joining_quest_after_logging_in(rv_driver):
     custom_quest.join_custom_quest(quest_code = quest)
     custom_quest.click_exit_quest()
     profile_helper.log_out_if_logged_in()
+
