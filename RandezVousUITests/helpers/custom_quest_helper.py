@@ -94,6 +94,7 @@ class CustomQuestPage:
     check_quest_requirements = (AppiumBy.ACCESSIBILITY_ID, "Check Quest Requirements")
     view_prompt = (AppiumBy.ACCESSIBILITY_ID, "View Prompt")
     prompt_text_box = (AppiumBy.IOS_CLASS_CHAIN, "**/XCUIElementTypeTextView")
+    submit_response_button = (AppiumBy.ACCESSIBILITY_ID, "Submit Response")
     check_answer_button = (AppiumBy.ACCESSIBILITY_ID, "Check Answer")
     not_now_rating_button = (AppiumBy.ACCESSIBILITY_ID, "Not Now")
     dismiss_after_completing_activity = (AppiumBy.ACCESSIBILITY_ID, "PopoverDismissRegion")
@@ -259,6 +260,11 @@ class CustomQuestPage:
         text_view.clear()
         text_view.send_keys(response_text)
 
+    def click_submit(self):
+        """Waits for the 'submit response' button to become enabled and clicks it."""
+        submit_button = self.wait.until(EC.element_to_be_clickable(self.submit_response_button))
+        submit_button.click()
+
     def click_check_answer(self):
         """Waits for the 'Check Answer' button to become enabled and clicks it."""
         check_button = self.wait.until(EC.element_to_be_clickable(self.check_answer_button))
@@ -295,7 +301,7 @@ class CustomQuestPage:
         self.click_check_requirements()
         self.click_view_prompt()
         self.enter_prompt(response_text)
-        self.click_check_answer()
+        self.click_submit()
         self.dismiss_rating_popup_if_present()
         self.click_out_of_activity()
         self.click_back()
@@ -390,6 +396,7 @@ class CustomQuestPage:
         self.complete_location_activity("Location Activity")
         self.complete_honor_based_activity("Honor Code Activity")
         self.complete_prompt_activity("Prompt Activity", "Prompt")
+        self.click_back()
 
     def finish_quest(self):
         self.wait.until(EC.element_to_be_clickable(self.finish_quest_button)).click()

@@ -2,7 +2,7 @@ import pytest
 
 from helpers.custom_quest_helper import CustomQuestPage, QuestHelper
 from helpers.login_page_helper import LoginPageHelper, WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
-from helpers.profile_helper import ProfileHelper
+from helpers.device_helper import DeviceHelper
 from helpers.sign_in_overlay_helper import DashboardOverlay
 
 
@@ -19,6 +19,8 @@ def test_complete_quest_from_dashboard(rv_driver):
     quest_helper = QuestHelper(driver)
     custom_quest = CustomQuestPage(driver)
     login_helper = LoginPageHelper(driver)
+    device_helper = DeviceHelper(rv_driver)
+
 
     login_helper.click_skip_authentication()
     quest_helper.navigate_to_quests_tab()
@@ -33,6 +35,7 @@ def test_complete_quest_from_dashboard(rv_driver):
     if adventure.verify_start_adventure_page_is_displayed():
         adventure.click_start_adventure()
 
+    device_helper.set_simulator_location()
     custom_quest.complete_all_activities()
     custom_quest.finish_quest()
 
