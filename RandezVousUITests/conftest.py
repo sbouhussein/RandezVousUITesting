@@ -4,14 +4,14 @@ import time
 import subprocess
 import firebase_admin
 import pytest
+from appium.options.common import AppiumOptions
 from dotenv import load_dotenv
-from appium import webdriver
-from appium.options.ios import XCUITestOptions
 from firebase_admin import credentials
 from pathlib import Path
 
 from selenium.common import InvalidSessionIdException
 from selenium import webdriver
+from appium import webdriver as appium_webdriver
 
 from helpers.ios.firebase_cleanup_helper import cleanup_user_data
 import socket
@@ -117,7 +117,7 @@ def appium_server():
         log_fd.close()
 
 def _build_options(bundle_id, udid, no_reset=False, is_headless=False):
-    options = XCUITestOptions()
+    options = AppiumOptions()
     options.set_capability("platformName", "iOS")
     options.set_capability("appium:automationName", "XCUITest")
     options.set_capability("appium:deviceName", DEVICE_NAME)
@@ -126,7 +126,7 @@ def _build_options(bundle_id, udid, no_reset=False, is_headless=False):
     options.set_capability("appium:noReset", no_reset)
 
     if udid and udid.lower() != "booted":
-        options.udid = udid
+        options.set_capability("appium:udid", udid)
 
     options.set_capability("appium:forceAppLaunch", True)
     options.set_capability("appium:shouldTerminateApp", True)
@@ -147,7 +147,7 @@ def rv_driver(request, appium_server):
     target_headless = request.config.getoption("--headless")
 
     # Pass the extracted UDID into your options builder
-    driver = webdriver.Remote(
+    driver = appium_webdriver.Remote(
         APPIUM_SERVER_URL,
         options=_build_options(RV_BUNDLE_ID, udid=target_udid, is_headless=target_headless)
     )
@@ -198,8 +198,9 @@ def safari_driver(request, appium_server):
 @pytest.fixture(scope="session", autouse=True)
 def firebase_init():
     """Initializes Firebase using the verified absolute path."""
-    key_path = Path("backend/private/service-account-key.json")
+    project_root = Path(__file__).resolve().parent.parent
 
+    key_path = project_root / "private" / "service-account-key.json"
     if not key_path.exists():
         pytest.exit(f"ABSOLUTE PATH FAIL: \nTried: {key_path}")
 
@@ -208,7 +209,7 @@ def firebase_init():
         firebase_admin.initialize_app(cred)
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def setup_teardown(request,rv_driver):
     """SETUP: Runs before every test """
     marker = request.node.get_closest_marker("cleanup")
@@ -221,23 +222,6 @@ def setup_teardown(request,rv_driver):
             cleanup_user_data(target_username = identifier, target_score = score)
         elif cleanup_type == "email":
             cleanup_user_data(target_email = identifier, target_score = score)
-
-   # print(f"Factory resetting: {RV_BUNDLE_ID}")
-   # try:
-   #     rv_driver.terminate_app(RV_BUNDLE_ID)
-   #     rv_driver.execute_script('mobile: clearApp', {'bundleId': RV_BUNDLE_ID})
-   #     rv_driver.activate_app(RV_BUNDLE_ID)
-   # except Exception as e:
-   #     print(f"App reset failed: {e}")
-
-#work on reset simulator function and run whole suite
-#test core functionality:
-    #make sure we can complete activities and all different validation types: photo submission, honor, location(assert user is outside of radius so they can't click button to complete the quest), trivia, prompt
-        #for each one validate
-    #in admin dashboard create a new quest and have 1 activity of each type. Make sure the user can complete the activity. For non based tests.
-    #do the same as the line above for point based quests
-    #do we want to test all cases at once or seperate?
-    #come up with a strategies
 
 html_results = []
 
