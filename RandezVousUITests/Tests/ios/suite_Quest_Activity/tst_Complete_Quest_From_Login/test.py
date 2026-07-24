@@ -1,10 +1,9 @@
 import pytest
 
-from helpers import device_helper
-from helpers.custom_quest_helper import CustomQuestPage, QuestHelper
-from helpers.login_page_helper import LoginPageHelper
-from helpers.profile_helper import ProfileHelper
-from helpers.device_helper import DeviceHelper
+from helpers.ios.custom_quest_helper import CustomQuestPage, QuestHelper
+from helpers.ios.login_page_helper import LoginPageHelper
+from helpers.ios.profile_helper import ProfileHelper
+from helpers.ios.device_helper import DeviceHelper
 
 @pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
 def test_complete_quest_from_login(rv_driver):

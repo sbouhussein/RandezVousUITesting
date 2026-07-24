@@ -1,8 +1,8 @@
 from appium.webdriver.common.appiumby import AppiumBy
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from helpers.profile_helper import ProfileHelper
-from helpers.sign_in_overlay_helper import DashboardOverlay
+from helpers.ios.profile_helper import ProfileHelper
+from helpers.ios.sign_in_overlay_helper import DashboardOverlay
 
 
 class LoginPageHelper:

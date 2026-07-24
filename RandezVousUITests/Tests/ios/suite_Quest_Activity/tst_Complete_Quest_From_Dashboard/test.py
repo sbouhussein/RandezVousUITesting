@@ -1,9 +1,9 @@
 import pytest
 
-from helpers.custom_quest_helper import CustomQuestPage, QuestHelper
-from helpers.login_page_helper import LoginPageHelper, WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
-from helpers.device_helper import DeviceHelper
-from helpers.sign_in_overlay_helper import DashboardOverlay
+from helpers.ios.custom_quest_helper import CustomQuestPage, QuestHelper
+from helpers.ios.login_page_helper import LoginPageHelper, WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
+from helpers.ios.device_helper import DeviceHelper
+from helpers.ios.sign_in_overlay_helper import DashboardOverlay
 
 
 @pytest.mark.cleanup(type="username", value="AutomatedTester")

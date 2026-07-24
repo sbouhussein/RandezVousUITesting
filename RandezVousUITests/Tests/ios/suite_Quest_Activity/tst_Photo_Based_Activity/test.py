@@ -1,9 +1,9 @@
 import pytest
 import os
-from helpers.custom_quest_helper import CustomQuestPage
-from helpers.login_page_helper import LoginPageHelper
-from helpers.profile_helper import ProfileHelper
-from helpers.media_helper import push_image_to_simulator_gallery, make_image_recent
+from helpers.ios.custom_quest_helper import CustomQuestPage
+from helpers.ios.login_page_helper import LoginPageHelper
+from helpers.ios.profile_helper import ProfileHelper
+from helpers.ios.media_helper import push_image_to_simulator_gallery, make_image_recent
 
 @pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
 def test_photo_based_activity(rv_driver):

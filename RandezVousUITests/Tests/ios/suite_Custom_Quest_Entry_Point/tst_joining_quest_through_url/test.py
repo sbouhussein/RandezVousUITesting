@@ -1,9 +1,8 @@
 import pytest
 
-from helpers import custom_quest_helper
-from helpers.custom_quest_helper import CustomQuestPage
-from helpers.firebase_cleanup_helper import cleanup_user_data
-from helpers.login_page_helper import WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper, LoginPageHelper
+from helpers.ios.custom_quest_helper import CustomQuestPage
+from helpers.ios.firebase_cleanup_helper import cleanup_user_data
+from helpers.ios.login_page_helper import WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper, LoginPageHelper
 
 QUEST_URL = "https://www.randezvous.com/quest/organization/test-3hmYPwC0cFa6zch5syk7/testautomationQuest/onboarding"
 

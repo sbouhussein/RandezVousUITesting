@@ -1,11 +1,7 @@
-import time
-
 from appium.webdriver.common.appiumby import AppiumBy
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-
-from helpers.login_page_helper import LoginPageHelper
 
 
 class QuestHelper:

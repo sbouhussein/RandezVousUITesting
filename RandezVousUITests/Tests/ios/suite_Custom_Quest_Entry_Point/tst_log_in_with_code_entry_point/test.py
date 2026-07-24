@@ -1,9 +1,8 @@
 import pytest
 
-from helpers import custom_quest_helper
-from helpers.custom_quest_helper import CustomQuestPage
-from helpers.login_page_helper import LoginPageHelper, WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
-from helpers.profile_helper import ProfileHelper
+from helpers.ios.custom_quest_helper import CustomQuestPage
+from helpers.ios.login_page_helper import LoginPageHelper, WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
+
 
 @pytest.mark.cleanup(type="username", value="AutomatedTester")
 def test_log_in_with_code_entry_point(rv_driver):

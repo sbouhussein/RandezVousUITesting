@@ -1,16 +1,16 @@
 import pytest
 
-from helpers.custom_quest_helper import CustomQuestPage
-from helpers.login_page_helper import LoginPageHelper
-from helpers.profile_helper import ProfileHelper
+from helpers.ios.custom_quest_helper import CustomQuestPage
+from helpers.ios.login_page_helper import LoginPageHelper
+from helpers.ios.profile_helper import ProfileHelper
 
 @pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
-def test_trivia_based_activity(rv_driver):
+def test_prompt_based_activity(rv_driver):
     email = "oalson123@gmail.com"
     password = "OmarTest123"
     quest = "TestAutomationActivityQuest"
-    activity = "Trivia Activity"
-    response = "Trivia"
+    activity = "Prompt Activity"
+    response = "Prompt"
 
     custom_quest = CustomQuestPage(rv_driver)
     login_helper = LoginPageHelper(rv_driver)
@@ -18,7 +18,8 @@ def test_trivia_based_activity(rv_driver):
 
     login_helper.login_with_credentials(email, password)
     custom_quest.join_custom_quest(quest)
-    custom_quest.complete_trivia_activity(activity, response)
+    custom_quest.complete_prompt_activity(activity, response)
 
     custom_quest.click_exit_quest()
     profile_helper.log_out_if_logged_in()
+

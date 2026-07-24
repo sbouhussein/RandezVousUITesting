@@ -1,8 +1,8 @@
 import pytest
 
-from helpers.custom_quest_helper import CustomQuestPage
-from helpers.login_page_helper import LoginPageHelper
-from helpers.profile_helper import ProfileHelper
+from helpers.ios.custom_quest_helper import CustomQuestPage
+from helpers.ios.login_page_helper import LoginPageHelper
+from helpers.ios.profile_helper import ProfileHelper
 
 @pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
 def test_honor_based_activity(rv_driver):

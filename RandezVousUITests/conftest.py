@@ -11,11 +11,12 @@ from firebase_admin import credentials
 from pathlib import Path
 
 from selenium.common import InvalidSessionIdException
+from selenium import webdriver
 
-from helpers.firebase_cleanup_helper import cleanup_user_data
+from helpers.ios.firebase_cleanup_helper import cleanup_user_data
 import socket
 
-load_dotenv(os.path.join(os.path.dirname(__file__), "../..", ".env"))
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 APPIUM_PORT = os.getenv("APPIUM_PORT", "4723")
 APPIUM_SERVER_URL = f"http://127.0.0.1:{APPIUM_PORT}"
@@ -43,7 +44,7 @@ def appium_server():
         os.system(f"lsof -P | grep ':{APPIUM_PORT}' | awk '{{print $2}}' | xargs kill -9")
         time.sleep(2)
 
-    log_dir = os.path.join(os.path.dirname(__file__), "logs")
+    log_dir = os.path.join(os.path.dirname(__file__), "RandezVousUITests/Tests/logs")
     os.makedirs(log_dir, exist_ok=True)
     log_fd = open(os.path.join(log_dir, "appium_server.log"), "w")
 
@@ -88,7 +89,7 @@ def appium_server():
         os.system(f"lsof -P | grep ':{APPIUM_PORT}' | awk '{{print $2}}' | xargs kill -9")
         time.sleep(2)
 
-    log_dir = os.path.join(os.path.dirname(__file__), "logs")
+    log_dir = os.path.join(os.path.dirname(__file__), "RandezVousUITests/Tests/logs")
     os.makedirs(log_dir, exist_ok=True)
     log_fd = open(os.path.join(log_dir, "appium_server.log"), "w")
 
@@ -117,16 +118,16 @@ def appium_server():
 
 def _build_options(bundle_id, udid, no_reset=False, is_headless=False):
     options = XCUITestOptions()
-    options.platform_name = "iOS"
-    options.automation_name = "XCUITest"
-    options.device_name = DEVICE_NAME
-    options.platform_version = PLATFORM_VERSION
+    options.set_capability("platformName", "iOS")
+    options.set_capability("appium:automationName", "XCUITest")
+    options.set_capability("appium:deviceName", DEVICE_NAME)
+    options.set_capability("appium:platformVersion", PLATFORM_VERSION)
+    options.set_capability("appium:bundleId", bundle_id)
+    options.set_capability("appium:noReset", no_reset)
 
     if udid and udid.lower() != "booted":
         options.udid = udid
 
-    options.bundle_id = bundle_id
-    options.no_reset = no_reset
     options.set_capability("appium:forceAppLaunch", True)
     options.set_capability("appium:shouldTerminateApp", True)
     options.set_capability("appium:useNewWDA", False)
@@ -142,8 +143,6 @@ def _build_options(bundle_id, udid, no_reset=False, is_headless=False):
 
 @pytest.fixture
 def rv_driver(request, appium_server):
-    # Extract the UDID from the command-line arguments
-    # If not provided, this will equal your default ("booted")
     target_udid = request.config.getoption("--udid")
     target_headless = request.config.getoption("--headless")
 
@@ -161,6 +160,15 @@ def rv_driver(request, appium_server):
     except Exception as e:
         print(f"\n⚠️ Ignored driver teardown error: {e}")
 
+
+@pytest.fixture
+def desktop_safari_driver():
+    """Launches the native Desktop Safari browser on macOS."""
+    driver = webdriver.Safari()
+
+    driver.maximize_window()
+    yield driver
+    driver.quit()
 
 @pytest.fixture
 def rv_driver_no_reset(appium_server):
@@ -190,19 +198,17 @@ def safari_driver(request, appium_server):
 @pytest.fixture(scope="session", autouse=True)
 def firebase_init():
     """Initializes Firebase using the verified absolute path."""
-    # Based on your screenshot, this is the exact physical path on your Mac
-    key_path = Path("/Users/omar/workspace/RandezVousUITesting/private/randezvousbeta-82ea6-firebase-adminsdk-3y9u9-382d940bea.json")
+    key_path = Path("backend/private/service-account-key.json")
 
     if not key_path.exists():
-        # If this still fails, we will search the whole computer for that file
-        pytest.exit(f"ABSOLUTE PATH FAIL: Is the disk named something other than /Users/omar/? \nTried: {key_path}")
+        pytest.exit(f"ABSOLUTE PATH FAIL: \nTried: {key_path}")
 
     if not firebase_admin._apps:
         cred = credentials.Certificate(str(key_path))
         firebase_admin.initialize_app(cred)
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def setup_teardown(request,rv_driver):
     """SETUP: Runs before every test """
     marker = request.node.get_closest_marker("cleanup")
