@@ -21,7 +21,9 @@ Future scope includes the RandezVous web app and admin dashboard (`/Users/samibo
 - Clone this repo: 
   - https://github.com/sbouhussein/RandezVousUITesting
 
-- Navigate to the Python Project and run this command: "bash setup.sh"
+- Navigate to RandezVousUITesting and run these commands
+  - "chmod +x setup.sh"
+  - "./setup.sh"
   - This will install NVM, Node.js and Appium
 
 - Install Appium Inspector which is used for knowing object names
