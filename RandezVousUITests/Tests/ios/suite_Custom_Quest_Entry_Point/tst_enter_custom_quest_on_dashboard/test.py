@@ -18,6 +18,7 @@ def test_enter_custom_quest_on_dashboard(rv_driver):
     custom_quest = CustomQuestPage(driver)
     login_helper = LoginPageHelper(driver)
 
+    quest_helper.sign_out_if_signed_in()
     login_helper.click_skip_authentication()
     quest_helper.navigate_to_quests_tab()
     assert dashboard.verify_dashboard_is_displayed(), "Quests Dashboard not detected"

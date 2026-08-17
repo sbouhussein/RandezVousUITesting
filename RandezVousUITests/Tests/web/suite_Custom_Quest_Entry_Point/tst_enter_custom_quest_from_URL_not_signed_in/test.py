@@ -4,22 +4,22 @@ import pytest
 from helpers.web.homepage_helper import HomepageHelper
 from helpers.web.quest_helper import QuestHelper
 
+
 @pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
-def test_enter_custom_quest_from_homepage(desktop_safari_driver):
+def test_enter_custom_quest_from_url_not_signed_in(desktop_safari_driver):
     desktop_safari_driver.get("http://localhost:5173")
     email = "oalson123@gmail.com"
     password = "OmarTest123"
-    quest_code = "TestAutomationActivityQuest"
+    QUEST_URL = "https://www.randezvous.com/quest/organization/test-3hmYPwC0cFa6zch5syk7/testautomationQuest/onboarding"
     response = "Trivia"
 
     nav = HomepageHelper(desktop_safari_driver)
     quest = QuestHelper(desktop_safari_driver)
 
+    desktop_safari_driver.get(QUEST_URL)
     time.sleep(2)
-    nav.login(email, password)
-    nav.click_find_quest()
-    quest.enter_quest_code(quest_code)
-    quest.click_find_quest()
+    nav.click_guest_button()
     quest.complete_trivia_activity(response)
-    time.sleep(10)
+    time.sleep(200)
+
 

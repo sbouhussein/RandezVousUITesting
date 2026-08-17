@@ -1,5 +1,4 @@
 import time
-from lib2to3.pgen2 import driver
 
 from appium.webdriver.common.appiumby import AppiumBy
 from selenium.webdriver.support.ui import WebDriverWait

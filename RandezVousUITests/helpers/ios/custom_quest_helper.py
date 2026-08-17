@@ -2,10 +2,14 @@ from appium.webdriver.common.appiumby import AppiumBy
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from helpers.ios.base_helper import BaseHelper
+from helpers.ios.login_page_helper import LoginPageHelper
+from helpers.ios.profile_helper import ProfileHelper
 
 
-class QuestHelper:
+class QuestHelper(BaseHelper, LoginPageHelper, ProfileHelper):
     def __init__(self, driver):
+        super().__init__(driver)
         self.driver = driver
         self.wait = WebDriverWait(self.driver, 10)
 
@@ -14,7 +18,7 @@ class QuestHelper:
     home_tab = (AppiumBy.ACCESSIBILITY_ID, "house")
     explore_tab = (AppiumBy.ACCESSIBILITY_ID, " Explore ")
     participants_tab = (AppiumBy.ACCESSIBILITY_ID, " Participants ")
-    profile_tab = (AppiumBy.ACCESSIBILITY_ID, " Profile ")
+    #profile_tab = (AppiumBy.ACCESSIBILITY_ID, " Profile ")
 
     # Quests Page
     quests_header = (AppiumBy.ACCESSIBILITY_ID, "Quests")
@@ -22,6 +26,13 @@ class QuestHelper:
     active_badge = (AppiumBy.ACCESSIBILITY_ID, "Active")
     custom_quest_button = (AppiumBy.ACCESSIBILITY_ID, "Custom")
     join_quest_page = (AppiumBy.ACCESSIBILITY_ID, "Join a Quest")
+    tab_bar = (AppiumBy.XPATH,'//XCUIElementTypeTabBar[@name="Tab Bar"]/XCUIElementTypeOther/XCUIElementTypeOther[2]')
+    sign_in_prompt = (AppiumBy.ACCESSIBILITY_ID,
+        (
+            "Create an account or sign back in to customize your profile and get"
+            " activities personalized just for you."
+        ),
+                      )
 
     def navigate_to_quests_tab(self):
         print("Navigating to Quests Tab")
@@ -68,7 +79,23 @@ class QuestHelper:
         print(f"Success! Verified score for {actual_username} matches expected value of {actual_score}.")
         self.navigate_to_quests_tab()
 
-class CustomQuestPage:
+    def sign_out_if_signed_in(self):
+        if self.is_visible(self.tab_bar):
+            print("App is on Dashboard")
+            self.click(self.profile_tab)
+
+            if  self.is_visible(self.sign_in_prompt):
+                print("User is on Dasahbaord. Signing in and signing out")
+                self.login_and_out_to_cleanup(email_text="oalson123@gmail.com", password_text="OmarTest123")
+
+            elif self.is_visible(self.show_menu_button):
+                print("User is signed in. Signing out")
+                self.log_out_if_logged_in()
+
+        elif self.is_visible(self.login_with_code_button):
+            pass
+
+class CustomQuestPage(BaseHelper):
     def __init__(self, driver):
         self.driver = driver
         self.wait = WebDriverWait(self.driver, 15)
@@ -87,7 +114,7 @@ class CustomQuestPage:
     quest_title = (AppiumBy.IOS_CLASS_CHAIN, "**/XCUIElementTypeStaticText[`label == 'automation2'`][1]")
     quest_date_range = (AppiumBy.ACCESSIBILITY_ID, "March 9, 2026 - March 3, 2027")
     quest_feed_button = (AppiumBy.ACCESSIBILITY_ID, "Quest Feed, : Hello")
-    check_quest_requirements = (AppiumBy.ACCESSIBILITY_ID, "Check Quest Requirements")
+    check_quest_requirements = (AppiumBy.ACCESSIBILITY_ID, "View Quest Requirements")
     view_prompt = (AppiumBy.ACCESSIBILITY_ID, "View Prompt")
     prompt_text_box = (AppiumBy.IOS_CLASS_CHAIN, "**/XCUIElementTypeTextView")
     submit_response_button = (AppiumBy.ACCESSIBILITY_ID, "Submit Response")
@@ -102,6 +129,7 @@ class CustomQuestPage:
     complete_quest_button = (AppiumBy.ACCESSIBILITY_ID, "Complete in Quest")
     finish_quest_button = (AppiumBy.ACCESSIBILITY_ID, "Finish Quest")
     log_in_button = (AppiumBy.ACCESSIBILITY_ID, "Log in")
+    prompt_nav_bar = (AppiumBy.ACCESSIBILITY_ID, "Prompt Activity")
 
     """""Universal functions"""
     def join_custom_quest(self, quest_code):
@@ -231,9 +259,11 @@ class CustomQuestPage:
 
     def click_out_of_activity(self):
         """Taps the background to dismiss the bottom sheet."""
+        print("clicking out of the activity...")
         self.wait.until(EC.element_to_be_clickable(self.dismiss_after_completing_activity)).click()
 
     def click_back(self):
+        print("clicking back...")
         self.wait.until(EC.element_to_be_clickable(self.back_button)).click()
 
     """"Trivia Based Activity"""
@@ -286,13 +316,13 @@ class CustomQuestPage:
 
     def complete_honor_based_activity(self, activity, login = False):
         self.click_activity(activity)
-        self.click_add_to_quest_button()
+        self.click_complete_quest_button()
         self.click_completed_activity_button()
         self.dismiss_rating_popup_if_present()
         self.click_back()
 
     """" Prompt Based Activity"""
-    def complete_prompt_activity(self, activity, response_text):
+    def complete_prompt_activity(self, activity, response_text, click_back = False):
         self.click_activity(activity)
         self.click_check_requirements()
         self.click_view_prompt()
@@ -300,7 +330,8 @@ class CustomQuestPage:
         self.click_submit()
         self.dismiss_rating_popup_if_present()
         self.click_out_of_activity()
-        self.click_back()
+        if click_back:
+            self.click_back()
 
     """" Location Based Activity"""
     def click_complete_quest_button(self):
@@ -308,6 +339,7 @@ class CustomQuestPage:
 
     def complete_location_activity(self, activity):
         self.click_activity(activity)
+        self.click_complete_quest_button()
         self.click_complete_quest_button()
         self.dismiss_rating_popup_if_present()
         self.click_back()
@@ -392,11 +424,6 @@ class CustomQuestPage:
         self.complete_location_activity("Location Activity")
         self.complete_honor_based_activity("Honor Code Activity")
         self.complete_prompt_activity("Prompt Activity", "Prompt")
-        self.click_back()
-
-    def finish_quest(self):
-        self.wait.until(EC.element_to_be_clickable(self.finish_quest_button)).click()
-        self.click_out_of_finish_quest()
 
     def click_out_of_finish_quest(self):
         self.wait.until(EC.element_to_be_clickable(self.quests_nav_bar)).click()

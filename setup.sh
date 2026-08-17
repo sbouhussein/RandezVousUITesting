@@ -1,19 +1,28 @@
-```bash
-#!/bin/bash
-echo "Starting System Setup..."
+#!/usr/bin/env bash
 
-echo "1/4: Installing NVM..."
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+echo "Starting environment setup..."
 
-echo "2/4: Installing Node.js v24..."
-nvm install 24
+# 1. Ensure the virtual environment is created
+echo "Creating virtual environment (.venv)..."
+python3 -m venv .venv
 
-echo "3/4: Installing Appium Server..."
-npm install -g appium@latest
+# 2. Activate the environment
+source .venv/bin/activate
 
-echo "4/4: Installing Python Dependencies..."
-pip install -r requirements.txt
+# 3. Upgrade pip
+echo "Upgrading pip..."
+pip install --upgrade pip
 
-echo "Setup Complete!"
+# 4. Install required packages
+echo "Installing test dependencies..."
+if [ -f "requirements.txt" ]; then
+    pip install -r requirements.txt
+else
+    pip install pytest pytest-html selenium google-auth google-api-core firebase-admin appium-python-client python-dotenv piexif Pillow "urllib3<2"
+fi
+
+echo "==============================================="
+echo "Setup complete!"
+echo "To start running tests, turn on your environment by running:"
+echo "source .venv/bin/activate"
+echo "==============================================="

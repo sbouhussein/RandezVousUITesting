@@ -198,19 +198,21 @@ def safari_driver(request, appium_server):
 @pytest.fixture(scope="session", autouse=True)
 def firebase_init():
     """Initializes Firebase using the verified absolute path."""
-    project_root = Path(__file__).resolve().parent.parent
-
+    project_root = Path(__file__).parent.parent.resolve()
     key_path = project_root / "private" / "service-account-key.json"
+
+    print(f"Checking key at absolute path: {key_path.resolve()}")
     if not key_path.exists():
-        pytest.exit(f"ABSOLUTE PATH FAIL: \nTried: {key_path}")
+        pytest.exit(
+            f"ABSOLUTE PATH FAIL: \nTried: {key_path.resolve()}"
+        )
 
     if not firebase_admin._apps:
         cred = credentials.Certificate(str(key_path))
         firebase_admin.initialize_app(cred)
 
-
 @pytest.fixture(autouse=True)
-def setup_teardown(request,rv_driver):
+def setup_teardown(request):
     """SETUP: Runs before every test """
     marker = request.node.get_closest_marker("cleanup")
     if marker:

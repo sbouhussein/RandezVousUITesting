@@ -1,6 +1,6 @@
 import pytest
 
-from helpers.ios.custom_quest_helper import CustomQuestPage
+from helpers.ios.custom_quest_helper import CustomQuestPage, QuestHelper
 from helpers.ios.login_page_helper import LoginPageHelper, WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
 
 
@@ -13,11 +13,11 @@ def test_log_in_with_code_entry_point(rv_driver):
     choose_username = ChooseUsernameHelper(driver)
     start_adventure = StartAdventureHelper(driver)
     login_helper = LoginPageHelper(driver)
+    quest_helper = QuestHelper(driver)
     quest = "testautomationQuest"
 
-    if login_page.verify_login_page_is_displayed():
-        login_page.click_login_with_code()
-
+    quest_helper.sign_out_if_signed_in()
+    login_page.click_login_with_code()
     custom_quest_helper.enter_quest_code(quest)
     custom_quest_helper.click_find_quest()
     welcome.click_lets_go()

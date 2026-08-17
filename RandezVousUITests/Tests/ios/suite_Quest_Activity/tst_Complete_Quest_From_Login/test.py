@@ -19,12 +19,12 @@ def test_complete_quest_from_login(rv_driver):
     profile_helper = ProfileHelper(rv_driver)
     device_helper = DeviceHelper(rv_driver)
 
+    quest_helper.sign_out_if_signed_in()
     login_helper.login_with_credentials(email, password)
     custom_quest.join_custom_quest(quest)
     device_helper.set_simulator_location()
     custom_quest.complete_all_activities()
     #custom_quest.finish_quest()
 
-    custom_quest.click_exit_quest()
     profile_helper.log_out_if_logged_in()
 

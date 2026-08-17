@@ -11,8 +11,8 @@ def clean_user_data():
     username = "AutomatedTester"
     cleanup_user_data(target_username=username)
 
-def test_joining_quest_through_url(safari_driver):
-    driver = safari_driver
+def test_joining_quest_through_url(rv_driver):
+    driver = rv_driver
     welcome = WelcomeToQuestHelper(driver)
     username_screen = ChooseUsernameHelper(driver)
     adventure = StartAdventureHelper(driver)
@@ -21,20 +21,13 @@ def test_joining_quest_through_url(safari_driver):
 
     driver.get(QUEST_URL)
 
-    contexts = driver.contexts
-    for context in contexts:
-        if 'WEBVIEW' in context:
-            driver.switch_to.context(context)
-            break
+    print("Opening URL on safari")
+    driver.execute_script("mobile: deepLink", {
+        "url": QUEST_URL,
+        "bundleId": "sbouhussein.github.io-rvsite.RandezVous"
+    })
 
-    try:
-        driver.execute_script("window.localStorage.clear();")
-        driver.execute_script("window.sessionStorage.clear();")
-    except Exception as e:
-        print(f"JS Clear failed: {e}")
-
-    driver.switch_to.context('NATIVE_APP')
-
+    print("RandezVous should be opem")
     if welcome.verify_welcome_modal_is_displayed():
         welcome.click_lets_go()
 
