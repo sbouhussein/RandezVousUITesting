@@ -76,7 +76,7 @@ This path is gitignored. The `private/` directory is created manually — it is 
 - If you want to run all the tests then run this command: "pytest RandezVousUITests"
 
 - If you want to run only a specific test then you have to type the command above and the directory of where it is located
-  - ex. "pytest RandezVousUITests/Tests/suite_Quest_Activity/tst_Complete_Quest_From_Login/test.py"
+  - ex. "pytest RandezVousUITests/Tests/ios/suite_Quest_Activity/tst_Complete_Quest_From_Login/test.py"
 
 - If you want to run it by name then you can run this command and keep the quotes around Name of Test: pytest -k "Name of Test"
 
