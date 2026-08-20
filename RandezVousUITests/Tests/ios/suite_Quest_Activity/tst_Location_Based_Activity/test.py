@@ -2,7 +2,6 @@ import pytest
 
 from helpers.ios.custom_quest_helper import CustomQuestPage, QuestHelper
 from helpers.ios.login_page_helper import LoginPageHelper
-from helpers.ios.profile_helper import ProfileHelper
 from helpers.ios.device_helper import DeviceHelper
 
 
@@ -16,7 +15,6 @@ def test_location_based_activity(rv_driver):
     device_helper = DeviceHelper(rv_driver)
     custom_quest = CustomQuestPage(rv_driver)
     login_helper = LoginPageHelper(rv_driver)
-    profile_helper = ProfileHelper(rv_driver)
     quest_helper = QuestHelper(rv_driver)
 
     quest_helper.sign_out_if_signed_in()
@@ -24,7 +22,4 @@ def test_location_based_activity(rv_driver):
     custom_quest.join_custom_quest(quest)
     device_helper.set_simulator_location()
     custom_quest.complete_location_activity(activity)
-
-    custom_quest.click_exit_quest()
-    profile_helper.log_out_if_logged_in()
 

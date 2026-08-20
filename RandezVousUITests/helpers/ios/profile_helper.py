@@ -1,5 +1,3 @@
-import time
-
 from appium.webdriver.common.appiumby import AppiumBy
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -35,16 +33,12 @@ class ProfileHelper:
         menu = self.wait.until(EC.element_to_be_clickable(self.show_menu_button))
         menu.click()
 
-        logout_locator = (AppiumBy.ACCESSIBILITY_ID, "Log out")
-
         try:
-            # Check if visible immediately
-            log_out = self.driver.find_element(*logout_locator)
+            log_out = self.driver.find_element(*self.logout_button)
             if not log_out.is_displayed():
                 raise Exception("Not visible")
         except:
             print("Logout button not visible, scrolling to find it...")
-            # Use a scroll-to-visible approach
             self.driver.execute_script('mobile: scroll', {
                 'direction': 'down',
                 'element': self.driver.find_element(AppiumBy.CLASS_NAME, "XCUIElementTypeCollectionView").id,
@@ -56,5 +50,5 @@ class ProfileHelper:
 
         self.wait.until(EC.alert_is_present())
         self.driver.switch_to.alert.accept()
-        time.sleep(2)
+        self.wait.until(EC.invisibility_of_element_located(self.show_menu_button))
         print("User logged out successfully.")

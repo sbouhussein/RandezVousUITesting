@@ -1,8 +1,6 @@
 from appium.webdriver.common.appiumby import AppiumBy
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from helpers.ios.profile_helper import ProfileHelper
-from helpers.ios.sign_in_overlay_helper import DashboardOverlay
 
 
 class LoginPageHelper:
@@ -21,6 +19,7 @@ class LoginPageHelper:
     email_input_field = (AppiumBy.XPATH, "//XCUIElementTypeTextField[@placeholderValue='Email']")
     password_input_field = (AppiumBy.CLASS_NAME, "XCUIElementTypeSecureTextField")
     sign_in_button = (AppiumBy.ACCESSIBILITY_ID, "Sign In")
+    tab_bar = (AppiumBy.XPATH, '//XCUIElementTypeTabBar[@name="Tab Bar"]/XCUIElementTypeOther/XCUIElementTypeOther[2]')
 
     def verify_login_page_is_displayed(self):
         try:
@@ -75,19 +74,8 @@ class LoginPageHelper:
         if self.driver.is_keyboard_shown():
             self.driver.hide_keyboard()
 
-    def login_and_out_to_cleanup(self, email_text, password_text):
-        print("Resetting Simulator")
-
-        profile_help = ProfileHelper(self.driver)
-        dashboard = DashboardOverlay(self.driver)
-
-        dashboard.click_log_in()
-        self.verify_sign_in_page_is_displayed()
-        self.enter_email(email_text)
-        self.enter_password(password_text + "\n")
-        if self.driver.is_keyboard_shown():
-            self.driver.hide_keyboard()
-        profile_help.log_out_if_logged_in()
+        # Sign-in is async; wait for the tab bar so callers don't tap the next tab mid-transition.
+        WebDriverWait(self.driver, 20).until(EC.presence_of_element_located(self.tab_bar))
 
 class WelcomeToQuestHelper:
     def __init__(self, driver):

@@ -1,11 +1,8 @@
 import pytest
 
-from helpers.ios import base_helper, profile_helper
-from helpers.ios.base_helper import BaseHelper
 from helpers.ios.custom_quest_helper import CustomQuestPage, QuestHelper
 from helpers.ios.login_page_helper import LoginPageHelper, WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
 from helpers.ios.device_helper import DeviceHelper
-from helpers.ios.profile_helper import ProfileHelper
 from helpers.ios.sign_in_overlay_helper import DashboardOverlay
 
 
@@ -23,7 +20,6 @@ def test_complete_quest_from_dashboard(rv_driver):
     custom_quest = CustomQuestPage(driver)
     login_helper = LoginPageHelper(driver)
     device_helper = DeviceHelper(rv_driver)
-    profile_helper= ProfileHelper(driver)
 
     quest_helper.sign_out_if_signed_in()
     login_helper.click_skip_authentication()
@@ -41,9 +37,4 @@ def test_complete_quest_from_dashboard(rv_driver):
 
     device_helper.set_simulator_location()
     custom_quest.complete_all_activities()
-    #custom_quest.finish_quest()
-
-    profile_helper.navigate_to_profile()
-    login_helper.login_and_out_to_cleanup(email_text="oalson123@gmail.com", password_text="OmarTest123")
-
 

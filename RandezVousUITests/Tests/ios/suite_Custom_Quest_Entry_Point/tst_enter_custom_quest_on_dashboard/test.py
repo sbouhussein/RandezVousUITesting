@@ -1,6 +1,6 @@
 import pytest
 
-from helpers.ios.custom_quest_helper import CustomQuestPage, QuestHelper
+from helpers.ios.custom_quest_helper import QuestHelper
 from helpers.ios.login_page_helper import WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
 from helpers.ios.sign_in_overlay_helper import DashboardOverlay
 from helpers.ios.login_page_helper import LoginPageHelper
@@ -15,14 +15,13 @@ def test_enter_custom_quest_on_dashboard(rv_driver):
     choose_username = ChooseUsernameHelper(driver)
     adventure = StartAdventureHelper(driver)
     quest_helper = QuestHelper(driver)
-    custom_quest = CustomQuestPage(driver)
     login_helper = LoginPageHelper(driver)
 
     quest_helper.sign_out_if_signed_in()
     login_helper.click_skip_authentication()
     quest_helper.navigate_to_quests_tab()
     assert dashboard.verify_dashboard_is_displayed(), "Quests Dashboard not detected"
-    dashboard.enter_custom_quest_code("testautomationQuest")
+    dashboard.enter_custom_quest_code(quest)
 
     if welcome.verify_welcome_modal_is_displayed():
         welcome.click_lets_go()
@@ -34,5 +33,3 @@ def test_enter_custom_quest_on_dashboard(rv_driver):
     if adventure.verify_start_adventure_page_is_displayed():
         adventure.click_start_adventure()
 
-    custom_quest.click_exit_quest()
-    login_helper.login_and_out_to_cleanup(email_text="oalson123@gmail.com", password_text="OmarTest123")
