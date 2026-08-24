@@ -76,16 +76,16 @@ This path is gitignored. The `private/` directory is created manually — it is 
 - If you want to run all the tests then run this command: "pytest RandezVousUITests"
 
 - If you want to run only a specific test then you have to type the command above and the directory of where it is located
-  - ex. "pytest RandezVousUITests/Tests/ios/suite_Quest_Activity/tst_Complete_Quest_From_Login/test.py"
+  - ex. "pytest RandezVousUITests/tests/ios/suite_quest_activity/tst_complete_quest_from_login/test.py"
 
 - If you want to run it by name then you can run this command and keep the quotes around Name of Test: pytest -k "Name of Test"
 
-- If you want to run all tests then from the same directory above run this command: "pytest RandezVousUITests/Tests/"
+- If you want to run all tests then from the same directory above run this command: "pytest RandezVousUITests/tests/"
 
 ### Running a Test headless
 
 - If you don't want to run a test using the simulator, you must specify when running the test on the command line by adding "--headless" at the end of your test directory where the test lives
-  - ex. "pytest RandezVousUITests/Tests/suite_Quest_Activity/tst_Complete_Quest_From_Login/test.py --headless"
+  - ex. "pytest RandezVousUITests/tests/ios/suite_quest_activity/tst_complete_quest_from_login/test.py --headless"
 
   
 ### Helpful Pytest Commands & Flags

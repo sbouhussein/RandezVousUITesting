@@ -5,6 +5,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from helpers.ios.base_helper import BaseHelper
 from helpers.ios.login_page_helper import LoginPageHelper
 from helpers.ios.profile_helper import ProfileHelper
+from helpers.ios.device_helper import DeviceHelper
 
 
 class QuestHelper(BaseHelper, LoginPageHelper, ProfileHelper):
@@ -13,14 +14,11 @@ class QuestHelper(BaseHelper, LoginPageHelper, ProfileHelper):
         self.driver = driver
         self.wait = WebDriverWait(self.driver, 10)
 
-    # Tab Bar
     quests_tab = (AppiumBy.ACCESSIBILITY_ID, "scroll.fill")
     home_tab = (AppiumBy.ACCESSIBILITY_ID, "house")
     explore_tab = (AppiumBy.ACCESSIBILITY_ID, " Explore ")
     participants_tab = (AppiumBy.ACCESSIBILITY_ID, " Participants ")
-    #profile_tab = (AppiumBy.ACCESSIBILITY_ID, " Profile ")
 
-    # Quests Page
     quests_header = (AppiumBy.ACCESSIBILITY_ID, "Quests")
     leaderboard_button = (AppiumBy.ACCESSIBILITY_ID, "trophy.fill")
     active_badge = (AppiumBy.ACCESSIBILITY_ID, "Active")
@@ -81,16 +79,8 @@ class QuestHelper(BaseHelper, LoginPageHelper, ProfileHelper):
 
     def sign_out_if_signed_in(self):
         if self.is_visible(self.tab_bar):
-            print("App is on Dashboard")
-            self.click(self.profile_tab)
-
-            if  self.is_visible(self.sign_in_prompt):
-                print("User is on Dasahbaord. Signing in and signing out")
-                self.login_and_out_to_cleanup(email_text="oalson123@gmail.com", password_text="OmarTest123")
-
-            elif self.is_visible(self.show_menu_button):
-                print("User is signed in. Signing out")
-                self.log_out_if_logged_in()
+            print("App is signed in (anonymous or account). Fast-resetting to signed-out state.")
+            DeviceHelper(self.driver).fast_reset_to_signed_out()
 
         elif self.is_visible(self.login_with_code_button):
             pass
@@ -370,12 +360,10 @@ class CustomQuestPage(BaseHelper):
 
     def select_most_recent_image(self):
         print("Finding image by identifier...")
-        all_photos = self.driver.find_elements(AppiumBy.ACCESSIBILITY_ID, "PXGGridLayout-Info")
-
-        if not all_photos:
-            raise Exception("Could not find any photos.")
-
-        first_photo = all_photos[0]
+        # The picker populates its grid asynchronously after opening, so wait rather than reading it cold.
+        first_photo = self.wait.until(
+            EC.presence_of_element_located((AppiumBy.ACCESSIBILITY_ID, "PXGGridLayout-Info"))
+        )
 
         rect = first_photo.rect
         x = rect['x'] + (rect['width'] / 2)
@@ -388,19 +376,12 @@ class CustomQuestPage(BaseHelper):
             'y': y,
             'element': first_photo
         })
-        print("Waiting for app to process selection...")
 
     def click_send_button(self):
         print("Waiting for Send button visibility...")
-        wait = WebDriverWait(self.driver, 20)
-        try:
-            self.send_button = (AppiumBy.IOS_PREDICATE, "label == 'Send'")
-            btn = self.wait.until(EC.visibility_of_element_located(self.send_button))
-            btn.click()
-            print("Clicked Send Button")
-
-        except Exception as e:
-            raise e
+        send_button = (AppiumBy.IOS_PREDICATE, "label == 'Send'")
+        self.wait.until(EC.visibility_of_element_located(send_button)).click()
+        print("Clicked Send Button")
 
     def complete_photo_activity(self, activity):
         print("Step 1: Clicking activity...")

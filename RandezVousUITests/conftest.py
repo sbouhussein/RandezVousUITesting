@@ -20,56 +20,19 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 APPIUM_PORT = os.getenv("APPIUM_PORT", "4723")
 APPIUM_SERVER_URL = f"http://127.0.0.1:{APPIUM_PORT}"
-DEVICE_NAME = "iPhone 17 Pro"
-PLATFORM_VERSION = "26.2"
-#UDID = "02702BB3-0AE0-4167-9651-39F68787A375"
+DEVICE_NAME = os.getenv("DEVICE_NAME", "iPhone 17 Pro")
+PLATFORM_VERSION = os.getenv("PLATFORM_VERSION", "26.4")
 RV_BUNDLE_ID = os.getenv("RV_BUNDLE_ID", "sbouhussein.github.io-rvsite.RandezVous")
 SAFARI_BUNDLE_ID = os.getenv("SAFARI_BUNDLE_ID", "com.apple.mobilesafari")
+APP_CHECK_DEBUG_TOKEN = os.getenv("FIREBASE_APP_CHECK_DEBUG_TOKEN")
 
 def pytest_addoption(parser):
     parser.addoption("--udid", action="store", default="booted", help="UDID of the iOS Simulator")
-    # This creates the toggle. Usage: pytest --headless
     parser.addoption("--headless", action="store_true", help="Run the simulator in headless mode")
 
 def is_port_in_use(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('localhost', int(port))) == 0
-
-
-@pytest.fixture(scope="session")
-def appium_server():
-    # 1. FORCE CLEANUP: If something is on 4723, kill it first
-    if is_port_in_use(APPIUM_PORT):
-        print(f"Port {APPIUM_PORT} in use. Cleaning up...")
-        os.system(f"lsof -P | grep ':{APPIUM_PORT}' | awk '{{print $2}}' | xargs kill -9")
-        time.sleep(2)
-
-    log_dir = os.path.join(os.path.dirname(__file__), "RandezVousUITests/Tests/logs")
-    os.makedirs(log_dir, exist_ok=True)
-    log_fd = open(os.path.join(log_dir, "appium_server.log"), "w")
-
-    # 2. START SERVER
-    process = subprocess.Popen(
-        ["appium", "--port", APPIUM_PORT, "--log-level", "info"],
-        stdout=log_fd,
-        stderr=log_fd,
-        preexec_fn=os.setsid,
-    )
-
-    # 3. VERIFY: Wait and check if it crashed
-    time.sleep(5)
-    if process.poll() is not None:
-        raise RuntimeError("Appium failed to start! Check Tests/logs/appium_server.log")
-
-    yield process
-
-    # 4. SAFER TEARDOWN
-    try:
-        os.killpg(os.getpgid(process.pid), 9)
-    except ProcessLookupError:
-        pass
-    finally:
-        log_fd.close()
 
 def _require_env(name: str) -> str:
     value = os.getenv(name)
@@ -77,23 +40,22 @@ def _require_env(name: str) -> str:
         raise EnvironmentError(f"Required environment variable '{name}' is not set. See .env.example.")
     return value
 
-def is_port_in_use(port):
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(('localhost', int(port))) == 0
-
 @pytest.fixture(scope="session")
 def appium_server():
-    # 1. FORCE CLEANUP: If something is on 4723, kill it first
     if is_port_in_use(APPIUM_PORT):
         print(f"Port {APPIUM_PORT} in use. Cleaning up...")
-        os.system(f"lsof -P | grep ':{APPIUM_PORT}' | awk '{{print $2}}' | xargs kill -9")
+        pids = subprocess.run(
+            ["lsof", "-ti", f":{APPIUM_PORT}"],
+            capture_output=True, text=True,
+        ).stdout.split()
+        if pids:
+            subprocess.run(["kill", "-9", *pids])
         time.sleep(2)
 
     log_dir = os.path.join(os.path.dirname(__file__), "RandezVousUITests/Tests/logs")
     os.makedirs(log_dir, exist_ok=True)
     log_fd = open(os.path.join(log_dir, "appium_server.log"), "w")
 
-    # 2. START SERVER
     process = subprocess.Popen(
         ["appium", "--port", APPIUM_PORT, "--log-level", "info"],
         stdout=log_fd,
@@ -101,14 +63,12 @@ def appium_server():
         preexec_fn=os.setsid,
     )
 
-    # 3. VERIFY: Wait and check if it crashed
     time.sleep(5)
     if process.poll() is not None:
         raise RuntimeError("Appium failed to start! Check Tests/logs/appium_server.log")
 
     yield process
 
-    # 4. SAFER TEARDOWN
     try:
         os.killpg(os.getpgid(process.pid), 9)
     except ProcessLookupError:
@@ -133,11 +93,19 @@ def _build_options(bundle_id, udid, no_reset=False, is_headless=False):
     options.set_capability("appium:useNewWDA", False)
     options.set_capability("appium:showXcodeLog", True)
     options.set_capability("appium:resetKeychain", True)
+    options.set_capability("appium:autoAcceptAlerts", True)
     options.set_capability("appium:isHeadless", is_headless)
     options.set_capability("appium:launchTimeout", 90000)
     options.set_capability("appium:wdaLaunchTimeout", 90000)
     options.set_capability("appium:appPushTimeout", 60000)
     options.set_capability("appium:waitForIdleTimeout", 500)
+
+    if APP_CHECK_DEBUG_TOKEN:
+        # Pins App Check's debug provider to a token pre-registered in Firebase Console.
+        options.set_capability("appium:processArguments", {
+            "env": {"FIRAAppCheckDebugToken": APP_CHECK_DEBUG_TOKEN}
+        })
+
     return options
 
 
