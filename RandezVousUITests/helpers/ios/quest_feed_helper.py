@@ -9,7 +9,7 @@ class QuestFeedHelper:
         self.wait = WebDriverWait(self.driver, 10)
 
         # Header & Navigation
-        self.back_button = (AppiumBy.ACCESSIBILITY_ID, "chevron.left")
+        self.back_button = (AppiumBy.IOS_PREDICATE, "label == 'Back'")
         self.megaphone_button = (AppiumBy.ACCESSIBILITY_ID, "megaphone.fill")
         self.filter_button = (AppiumBy.ACCESSIBILITY_ID, "All Posts")
 

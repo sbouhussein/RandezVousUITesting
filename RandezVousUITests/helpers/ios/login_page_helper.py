@@ -87,7 +87,7 @@ class WelcomeToQuestHelper:
     guest_onboarding_description_text = (AppiumBy.ACCESSIBILITY_ID,
                                          "Let's get you set up with a temporary guest profile so you can join the fun. You can create a full account later to save your progress.")
     lets_go_button = (AppiumBy.ACCESSIBILITY_ID, "Let's Go")
-    close_modal_button = (AppiumBy.ACCESSIBILITY_ID, "xmark.circle.fill")
+    close_modal_button = (AppiumBy.IOS_PREDICATE, "label == 'Cancel'")
 
     def verify_welcome_modal_is_displayed(self):
         try:
@@ -122,7 +122,7 @@ class ChooseUsernameHelper:
     leaderboard_description_text = (AppiumBy.ACCESSIBILITY_ID, "This will be your name on the quest leaderboard.")
     username_input_field = (AppiumBy.CLASS_NAME, "XCUIElementTypeTextField")
     join_quest_button = (AppiumBy.ACCESSIBILITY_ID, "Join Quest")
-    close_modal_button = (AppiumBy.ACCESSIBILITY_ID, "xmark.circle.fill")
+    close_modal_button = (AppiumBy.IOS_PREDICATE, "label == 'Cancel'")
 
     def verify_choose_username_page_is_displayed(self):
         try:
@@ -156,7 +156,7 @@ class StartAdventureHelper:
     quest_title_text = (AppiumBy.ACCESSIBILITY_ID, "automation2")
     adventure_welcome_message_text = (AppiumBy.ACCESSIBILITY_ID, "Time to start your adventure!")
     start_adventure_button = (AppiumBy.ACCESSIBILITY_ID, "Start Adventure!")
-    close_modal_button = (AppiumBy.ACCESSIBILITY_ID, "xmark.circle.fill")
+    close_modal_button = (AppiumBy.IOS_PREDICATE, "label == 'Cancel'")
 
     def verify_start_adventure_page_is_displayed(self):
         try:
