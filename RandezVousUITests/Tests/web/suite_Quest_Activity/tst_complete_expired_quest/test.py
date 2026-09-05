@@ -1,27 +1,25 @@
-import time
 import pytest
-
+import time
 from helpers.web.homepage_helper import HomepageHelper
 from helpers.web.quest_helper import QuestHelper
 
-
 @pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
-def test_enter_custom_quest_from_url_signed_in(desktop_safari_driver):
+def test_complete_expired_quest(desktop_safari_driver):
+
+    print("Navigating to http://localhost:5173")
     desktop_safari_driver.get("http://localhost:5173")
     email = "oalson123@gmail.com"
     password = "OmarTest123"
-    QUEST_URL = "http://localhost:5173/quest/organization/test-3hmYPwC0cFa6zch5syk7/TestAutomationActivityQuest/onboarding"
-    response = "Trivia"
+    quest_code = "TestAutomationActivityQuest"
 
     nav = HomepageHelper(desktop_safari_driver)
     quest = QuestHelper(desktop_safari_driver)
 
-    desktop_safari_driver.get(QUEST_URL)
-    time.sleep(2)
-    nav.click_sign_in_to_save_button()
+    print("Signing in")
     nav.login(email, password)
-    #look at automation
-    quest.complete_trivia_activity(response)
-    time.sleep(200)
+    nav.find_quest(quest_code)
 
+    # TODO: Add your helper method to assert the expired UI state here
+    # assert quest.is_quest_expired_message_visible() == True
 
+    print("--- Finished test_complete_expired_quest ---\n")

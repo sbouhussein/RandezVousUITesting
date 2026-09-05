@@ -17,12 +17,14 @@ class QuestHelper:
 
     def enter_quest_code(self, code):
         """Waits for the input field to be clickable, clears it, and types the code."""
+        print("Entering quest code")
         input_field = self.wait.until(EC.element_to_be_clickable(self.quest_code_input_locator))
         input_field.clear()
         input_field.send_keys(code)
 
     def click_find_quest(self):
         """Waits for the Find Quest submit button to be clickable, then clicks it."""
+        print("Clicking Find Quest button...")
         self.is_find_quest_button_enabled()
         button = self.wait.until(EC.element_to_be_clickable(self.find_quest_button_locator))
         button.click()

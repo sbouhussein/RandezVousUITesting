@@ -2,6 +2,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
+from helpers.web.quest_helper import QuestHelper
 
 class HomepageHelper:
     def __init__(self, driver):
@@ -16,8 +17,16 @@ class HomepageHelper:
         self.guest_button = (By.XPATH, "//button[contains(normalize-space(), 'Continue as Guest')]")
         self.sign_in_save= (By.XPATH, "//a[normalize-space()='Sign In to Save Progress']")
 
+    def find_quest(self, quest_code):
+        quest_helper = QuestHelper(self.driver)
+
+        self.click_find_quest()
+        quest_helper.enter_quest_code(quest_code)
+        quest_helper.click_find_quest()
+
     def click_find_quest(self):
         """Waits for the button to be clickable, then clicks it."""
+        print("\n--- Starting find_quest ---")
         self.wait.until(EC.element_to_be_clickable(self.find_quest_button)).click()
 
     def click_login_button(self):
@@ -60,4 +69,6 @@ class HomepageHelper:
         self.enter_email(email)
         self.enter_password(password)
         self.click_sign_in()
+
+
 
