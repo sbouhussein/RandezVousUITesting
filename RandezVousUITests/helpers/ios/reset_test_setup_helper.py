@@ -1,6 +1,9 @@
 import logging
+import subprocess
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
+
+from .device_helper import RV_BUNDLE_ID
 
 
 class TestSetupHelper:
@@ -32,13 +35,17 @@ class TestSetupHelper:
 
     def sign_out_flow(self):
         logging.info("Executing sign-out flow...")
-        self.driver.find_element(By.ACCESSIBILITY_ID, " Profile ").click()
-        self.profile.wait_for_screen_load()
-        self.profile.tap_logout()
-        try:
-            self.driver.find_element(By.ACCESSIBILITY_ID, "Confirm Logout").click()
-        except Exception:
-            pass
+        self.profile.log_out_if_logged_in()
 
-    def clear_simulator_cache(self):
+    def clear_simulator_cache(self, skip_quest_intro=True):
         self.driver.execute_script('mobile: clearAppLibrary')
+        if skip_quest_intro:
+            self._set_show_quest_intro(True)
+
+    def _set_show_quest_intro(self, value):
+        udid = self.driver.capabilities.get('udid')
+        subprocess.run(
+            ["xcrun", "simctl", "spawn", udid, "defaults", "write",
+             RV_BUNDLE_ID, "showQuestIntro", "-bool", str(value).lower()],
+            check=True,
+        )

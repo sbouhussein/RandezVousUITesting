@@ -14,17 +14,19 @@ class QuestHelper(BaseHelper, LoginPageHelper, ProfileHelper):
         self.driver = driver
         self.wait = WebDriverWait(self.driver, 10)
 
-    quests_tab = (AppiumBy.ACCESSIBILITY_ID, "scroll.fill")
+    quests_tab = (AppiumBy.IOS_PREDICATE, "label == ' Quests '")
     home_tab = (AppiumBy.ACCESSIBILITY_ID, "house")
     explore_tab = (AppiumBy.ACCESSIBILITY_ID, " Explore ")
     participants_tab = (AppiumBy.ACCESSIBILITY_ID, " Participants ")
 
     quests_header = (AppiumBy.ACCESSIBILITY_ID, "Quests")
-    leaderboard_button = (AppiumBy.ACCESSIBILITY_ID, "trophy.fill")
+    leaderboard_button = (AppiumBy.IOS_PREDICATE, "label == 'Leaderboard'")
     active_badge = (AppiumBy.ACCESSIBILITY_ID, "Active")
-    custom_quest_button = (AppiumBy.ACCESSIBILITY_ID, "Custom")
-    join_quest_page = (AppiumBy.ACCESSIBILITY_ID, "Join a Quest")
-    tab_bar = (AppiumBy.XPATH,'//XCUIElementTypeTabBar[@name="Tab Bar"]/XCUIElementTypeOther/XCUIElementTypeOther[2]')
+    custom_quest_button = (AppiumBy.ACCESSIBILITY_ID, "Find")
+    join_quest_page = (AppiumBy.ACCESSIBILITY_ID, "Find a Quest")
+    info_button = (AppiumBy.IOS_PREDICATE, "label == 'Quest rules'")
+    daily_challenge_section_label = (AppiumBy.ACCESSIBILITY_ID, "DAILY CHALLENGE")
+    start_daily_quest_button = (AppiumBy.IOS_CLASS_CHAIN, '**/XCUIElementTypeButton[`name CONTAINS "Start!"`]')
     sign_in_prompt = (AppiumBy.ACCESSIBILITY_ID,
         (
             "Create an account or sign back in to customize your profile and get"
@@ -42,6 +44,12 @@ class QuestHelper(BaseHelper, LoginPageHelper, ProfileHelper):
         self.wait.until(EC.element_to_be_clickable(self.custom_quest_button)).click()
         assert self.wait.until(EC.visibility_of_element_located(self.join_quest_page)).is_displayed(), \
             "Custom Quest overlay did not appear"
+
+    def click_info_icon(self):
+        self.wait.until(EC.element_to_be_clickable(self.info_button)).click()
+
+    def start_the_daily_challenge(self):
+        self.wait.until(EC.element_to_be_clickable(self.start_daily_quest_button)).click()
 
     def get_quest_title(self):
         return self.wait.until(EC.presence_of_element_located(self.quest_title)).text
@@ -91,7 +99,7 @@ class CustomQuestPage(BaseHelper):
         self.wait = WebDriverWait(self.driver, 15)
 
     back_button = (AppiumBy.ACCESSIBILITY_ID, "BackButton")
-    quest_code_input_field = (AppiumBy.IOS_CLASS_CHAIN, '**/XCUIElementTypeTextField[`value == "Custom Code"`]')
+    quest_code_input_field = (AppiumBy.CLASS_NAME, "XCUIElementTypeTextField")
     find_quest_button = (AppiumBy.ACCESSIBILITY_ID, "Find Quest")
     clear_search_button = (AppiumBy.ACCESSIBILITY_ID, "Clear Search")
     found_quest_title_label = (AppiumBy.ACCESSIBILITY_ID, "Found a Custom Quest")
@@ -112,7 +120,7 @@ class CustomQuestPage(BaseHelper):
     not_now_rating_button = (AppiumBy.ACCESSIBILITY_ID, "Not Now")
     dismiss_after_completing_activity = (AppiumBy.ACCESSIBILITY_ID, "PopoverDismissRegion")
     quests_nav_bar = (AppiumBy.ACCESSIBILITY_ID, "Quests")
-    back_button = (AppiumBy.ACCESSIBILITY_ID, "chevron.left")
+    back_button = (AppiumBy.IOS_PREDICATE, "label == 'Back'")
     add_to_quest_button = (AppiumBy.ACCESSIBILITY_ID, "Add to Quest")
     completed_activity_button = (AppiumBy.ACCESSIBILITY_ID, "I've completed this activity")
     submit_photo_button = (AppiumBy.XPATH, "//XCUIElementTypeButton[contains(@label, 'Submit a Photo')]")
