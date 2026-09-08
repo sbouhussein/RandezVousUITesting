@@ -20,12 +20,19 @@ class BaseHelper:
             return False
 
     def click(self, locator, custom_timeout=None):
-        """Waits for an element to be clickable, then clicks it."""
+        """Waits for an element, scrolls it into view, and clicks it. Falls back to JS click if blocked."""
         wait = (
             WebDriverWait(self.driver, custom_timeout)
             if custom_timeout
             else self.wait
         )
         element = wait.until(EC.element_to_be_clickable(locator))
-        element.click()
+        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center', inline: 'nearest'});", element)
+
+        try:
+            element.click()
+        except Exception:
+            # Fallback for when sticky headers, footers, or overlays intercept the native click event
+            self.driver.execute_script("arguments[0].click();", element)
+
         return element
