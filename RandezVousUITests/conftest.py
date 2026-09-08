@@ -13,6 +13,9 @@ from pathlib import Path
 from selenium.common import InvalidSessionIdException
 from selenium import webdriver
 from appium import webdriver as appium_webdriver
+from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 
 from helpers.ios.firebase_cleanup_helper import cleanup_user_data
 import socket
@@ -135,9 +138,29 @@ def rv_driver(request, appium_server):
 def desktop_safari_driver():
     """Launches the native Desktop Safari browser on macOS."""
     driver = webdriver.Safari()
-
     driver.maximize_window()
+
+    # 2. Perform the initial navigation
+    print("\nNavigating to http://localhost:5173")
+    driver.get("http://localhost:5173")
+
+    # 3. Wait for the base HTML to load
+    wait = WebDriverWait(driver, 10)
+    wait.until(lambda d: d.execute_script("return document.readyState") == "complete")
+
+    driver.execute_script("window.localStorage.clear();")
+    driver.execute_script("window.sessionStorage.clear();")
+    driver.refresh()
+
+    # 4. Wait for React to hydrate and render the actual UI
+    wait_for_react = WebDriverWait(driver, 15)
+    print("Waiting for React to hydrate and render the login page...")
+    wait_for_react.until(EC.visibility_of_element_located((By.XPATH, "//input[@type='email']")))
+
+    # 5. Hand the ready-to-use driver over to the test
     yield driver
+
+    # 6. Teardown: Quit the browser after the test finishes
     driver.quit()
 
 @pytest.fixture
@@ -357,11 +380,11 @@ def restart_node_server_for_web(request):
         yield
         return
 
-    print("\n--- [Web Test] Cleaning up Node processes on port 3000 ---")
-    subprocess.run(["npx", "kill-port", "3000"], capture_output=True)
+    print("\n--- [Web Test] Cleaning up Node processes on port 3000 and 5173 ---")
+    subprocess.run(["npx", "kill-port", "3000", "5173"], capture_output=True)
 
     print("--- [Web Test] Starting backend and React servers via npm start ---")
-    # Starts both backend and Vite dev server concurrently as outlined in the README quick start
+    # Starts both backend and Vite dev server concurrently
     backend_process = subprocess.Popen(
         ["npm", "start"],
         cwd="/Users/omar/workspace/rvsite",
@@ -369,29 +392,48 @@ def restart_node_server_for_web(request):
         stderr=subprocess.PIPE
     )
 
-    # Poll until the backend API is fully responsive
+    print("--- [Web Test] Waiting for backend on port 3000... ---")
     timeout = 20
     start_time = time.time()
-    server_ready = False
+    backend_ready = False
 
     while time.time() - start_time < timeout:
         try:
             response = requests.get("http://localhost:3000/api/user/profile")
             if response.status_code < 500:
-                server_ready = True
+                backend_ready = True
                 break
         except requests.exceptions.ConnectionError:
             time.sleep(0.5)
 
-    if not server_ready:
+    if not backend_ready:
         backend_process.terminate()
-        raise RuntimeError("Servers failed to start via 'npm start' within the timeout period.")
+        raise RuntimeError("Backend failed to start on port 3000 within timeout.")
 
-    print("--- [Web Test] Servers are ready. ---\n")
+    print("--- [Web Test] Backend ready. Waiting for React frontend on port 5173... ---")
+
+    vite_ready = False
+    vite_start = time.time()
+
+    while time.time() - vite_start < timeout:
+        try:
+            # Just ping the base URL to ensure the port is alive
+            frontend_response = requests.get("http://localhost:5173")
+            if frontend_response.status_code == 200:
+                vite_ready = True
+                break
+        except requests.exceptions.ConnectionError:
+            time.sleep(0.5)
+
+    if not vite_ready:
+        backend_process.terminate()
+        raise RuntimeError("Vite frontend failed to start on port 5173 within timeout.")
+
+    print("--- [Web Test] Both servers are ready! ---\n")
 
     yield
 
-    # Teardown: terminate the concurrent server processes after the web test finishes
+    print("\n--- [Web Test] Teardown: Killing background servers ---")
     backend_process.terminate()
     backend_process.wait()
     subprocess.run(["npx", "kill-port", "3000", "5173"], capture_output=True)
