@@ -30,6 +30,7 @@ PLATFORM_VERSION = os.getenv("PLATFORM_VERSION", "26.4")
 RV_BUNDLE_ID = os.getenv("RV_BUNDLE_ID", "sbouhussein.github.io-rvsite.RandezVous")
 SAFARI_BUNDLE_ID = os.getenv("SAFARI_BUNDLE_ID", "com.apple.mobilesafari")
 APP_CHECK_DEBUG_TOKEN = os.getenv("FIREBASE_APP_CHECK_DEBUG_TOKEN")
+WEB_APP_PATH = os.getenv("WEB_APP_PATH", "../../RandezVousSite/rvsite")
 
 def pytest_addoption(parser):
     parser.addoption("--udid", action="store", default="booted", help="UDID of the iOS Simulator")
@@ -387,7 +388,7 @@ def restart_node_server_for_web(request):
     # Starts both backend and Vite dev server concurrently
     backend_process = subprocess.Popen(
         ["npm", "start"],
-        cwd="/Users/omar/workspace/rvsite",
+        cwd=WEB_APP_PATH,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
     )
