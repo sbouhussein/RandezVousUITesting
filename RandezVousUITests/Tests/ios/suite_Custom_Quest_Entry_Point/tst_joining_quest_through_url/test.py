@@ -24,7 +24,7 @@ def test_joining_quest_through_url(rv_driver):
         "bundleId": "sbouhussein.github.io-rvsite.RandezVous"
     })
 
-    print("RandezVous should be opem")
+    print("RandezVous should be open")
     if welcome.verify_welcome_modal_is_displayed():
         welcome.click_lets_go()
 
