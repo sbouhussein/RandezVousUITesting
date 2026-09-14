@@ -386,8 +386,9 @@ def restart_node_server_for_web(request):
 
     print("--- [Web Test] Starting backend and React servers via npm start ---")
     # Starts both backend and Vite dev server concurrently
+    # TODO: Change back to npm start once quest is set up in QA environment
     backend_process = subprocess.Popen(
-        ["npm", "start"],
+        ["npm", "run", "start:prod"],
         cwd=WEB_APP_PATH,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
