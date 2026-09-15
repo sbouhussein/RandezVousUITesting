@@ -14,19 +14,20 @@ def test_complete_quest(desktop_safari_driver):
     trivia_response = "Trivia"
     prompt_response = "Prompt"
 
-    print("Injecting bulletproof geolocation mock...")
     latitude = 41.282778
     longitude = -157.829444
-
 
     nav = HomepageHelper(desktop_safari_driver)
     quest = QuestHelper(desktop_safari_driver)
 
-    quest.mock_geo_location(desktop_safari_driver, latitude, longitude)
-
     print("Signing in")
     nav.login(email, password)
     nav.find_quest(quest_code)
+
+    # Injected after login/find_quest on purpose: login() does a full page
+    # navigation (driver.get), which wipes any JS mock injected before it.
+    print("Injecting bulletproof geolocation mock...")
+    quest.mock_geo_location(desktop_safari_driver, latitude, longitude)
 
     print("Completing all required activities in the quest...")
     quest.complete_quest(trivia_response, prompt_response)

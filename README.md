@@ -1,172 +1,203 @@
 # RandezVous UI Testing
 
-Automated UI test suite for the RandezVous iOS app, built with [Appium](https://appium.io) + [pytest](https://pytest.org). Tests run against a local iOS Simulator via XCUITest.
+Automated UI test suite for RandezVous, built with [pytest](https://pytest.org). Covers two platforms:
 
-Future scope includes the RandezVous web app and admin dashboard (`/Users/samibouhussein/RandezVousSite/rvsite`).
+- **iOS** — [Appium](https://appium.io) + XCUITest, driving the RandezVous app on a local iOS Simulator.
+- **Web** — [Selenium](https://www.selenium.dev), driving a local checkout of the `rvsite` web app in Safari, Chrome, or Firefox.
 
 ---
-### Prerequisites
 
+## Contents
+
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [Running Tests](#running-tests)
+- [Repository Structure](#repository-structure)
+- [Adding Tests](#adding-tests)
+- [Style Guide](#style-guide)
+- [Known Quirks](#known-quirks)
+
+---
+
+## Prerequisites
+
+**Common**
 - Python 3.10+
+
+**iOS tests**
 - [Appium 2.x](https://appium.io/docs/en/2.0/) (`npm install -g appium`)
 - Appium XCUITest driver (`appium driver install xcuitest`)
 - Xcode + iOS Simulator (iPhone 17 Pro, iOS 26.4)
 - RandezVous app installed on the simulator (`sbouhussein.github.io-rvsite.RandezVous`)
 
+**Web tests**
+- Node.js (for running the `rvsite` dev servers)
+- A local checkout of `rvsite`, cloned to **exactly** `/Users/omar/workspace/rvsite` — this path is hardcoded in `conftest.py`'s `web_servers` fixture.
+- Safari (built in), and/or Chrome and/or Firefox if you want to run tests against them.
+
+---
+
 ## Setup
 
-- Download xcuitest which is the ios driver
-  - https://appium.github.io/appium-xcuitest-driver/latest/getting-started/installation/
-  
-- Clone this repo: 
-  - https://github.com/sbouhussein/RandezVousUITesting
+### 1. Clone and install this repo
 
-- Navigate to RandezVousUITesting and run these commands
-  - "chmod +x setup.sh"
-  - "./setup.sh"
-  - This will install NVM, Node.js and Appium
+```bash
+git clone https://github.com/sbouhussein/RandezVousUITesting
+cd RandezVousUITesting
+chmod +x setup.sh
+./setup.sh          # creates .venv, installs requirements.txt
+```
 
-- Install Appium Inspector which is used for knowing object names
-  - Run this command: "appium plugin install inspector"
+For iOS work, also install the Appium Inspector plugin (used for finding object names):
 
-### Installing Pycharm and opening the repo
+```bash
+appium plugin install inspector
+```
 
-- Link to Install Pycharm: https://www.jetbrains.com/pycharm/download/?section=mac
-- Open the repo by clicking on File > Open and navigate to the repo in your file explorer
+### 2. Firebase service account key
 
-### Running a Test in PyCharm
-
-- Open Xcode with the RandezVous Repo open 
-
-- And click on the play button in order to build and launch the simulator
-
-- Navigate to conftest.py in Pycharm and update these values 
-  - DEVICE_NAME
-  - PLATFORM_VERSION
-  - UDID
-    - Open Xcode.
-    - In the top menu bar, click Window > Devices and Simulators (or press Shift + Command + 2). 
-    - Click on the Simulators tab at the top of the window that appears. 
-    - Select your specific simulator model from the list on the left. 
-    - On the right side, you will see a field labeled Identifier. That is your UDID. You can right-click it to copy it.
-
-- After RandezVous installs on the simulator go to PyCharm and double-click or right-click on the test.py of the test you want run and click Run 'Python tests in test'
-
-### Add the Firebase service account key
-
-The key is not committed. Obtain it from the Firebase console:
+Not committed — obtain it from the Firebase console:
 
 > Firebase Console → Project Settings → Service Accounts → Generate new private key
 
-Save the downloaded JSON to:
+Save the downloaded JSON to `private/service-account-key.json` (gitignored; the `private/` directory isn't committed either).
 
+### 3. iOS setup
+
+- Open Xcode with the RandezVous repo and press ▶ to build and launch the simulator.
+- In `conftest.py`, set `DEVICE_NAME`, `PLATFORM_VERSION`, and the simulator's `UDID`:
+  Xcode → Window → Devices and Simulators (⇧⌘2) → Simulators tab → select your simulator → copy its **Identifier**.
+- (Optional) PyCharm: [download](https://www.jetbrains.com/pycharm/download/?section=mac), then File → Open → this repo. Right-click a `test.py` → **Run 'Python tests in test'**.
+
+### 4. Web setup
+
+Web tests drive a **real local `rvsite` dev server** — they don't hit any deployed environment.
+
+- Clone `rvsite` to `/Users/omar/workspace/rvsite` and run `npm install` there.
+- `rvsite` needs its own `.env` configured (Firebase client config, App Check debug token, etc.) — see `rvsite`'s own `.env.example`.
+- ⚠️ **Local-only backend change required:** `tst_complete_expired_quest` depends on a dev-only endpoint, `POST /api/local-admin/quest/:orgId/:questId/timing`, added to `rvsite/backend/routes/local-admin.js` during this test suite's development. As of writing, this change — along with a matching `allowEnded` fix in `backend/routes/activities.js` and a `hasJoined` fix in `src/components/QuestDetail.jsx` — is **uncommitted in the local `rvsite` checkout**, not yet pushed anywhere. If you're setting up on a fresh machine or a clean `rvsite` clone, that one test will fail until those three changes exist in `rvsite`. (These should get committed/pushed to `rvsite` at some point — ask before assuming they have been.)
+- `npm start` in `rvsite` now points at its QA target (port 5174) — the test harness instead runs `npm run start:prod`, which — despite the name — is the plain local-dev setup (regular `.env`, port 5173) these tests are built around. You don't need to run anything manually; `conftest.py` starts and stops both servers automatically per test session.
+
+---
+
+## Running Tests
+
+### From the command line
+
+```bash
+cd RandezVousUITesting
+source .venv/bin/activate
+
+# Run everything
+pytest RandezVousUITests
+
+# Run one suite or one test
+pytest RandezVousUITests/Tests/web/suite_Quest_Activity
+pytest RandezVousUITests/Tests/ios/suite_Quest_Activity/tst_Complete_Quest_From_Login/test.py
+
+# Run by test name
+pytest -k "complete_quest"
 ```
-private/service-account-key.json
+
+### From PyCharm
+
+Right-click any `test.py` → **Run 'Python tests in test'**.
+
+### Choosing a browser (web tests only)
+
+Web tests default to Safari. Pass `--browser` to use Chrome or Firefox instead — no code changes needed, Selenium auto-downloads the matching driver the first time each browser runs:
+
+```bash
+pytest RandezVousUITests/Tests/web --browser=chrome
+pytest RandezVousUITests/Tests/web --browser=firefox
 ```
 
-This path is gitignored. The `private/` directory is created manually — it is never committed.
+### Running headless
 
-### Running a Test on the command line
+```bash
+# iOS: runs the simulator headless
+pytest RandezVousUITests/Tests/ios/suite_Quest_Activity/tst_Complete_Quest_From_Login/test.py --headless
 
-- Open a terminal and navigate to the project.
-  - ex. cd /Users/omar/PycharmProjects/PythonProject
-  
-- Run this command: "source .venv/bin/activate"
+# Web: Chrome or Firefox only -- Safari has no headless mode
+pytest RandezVousUITests/Tests/web --browser=chrome --headless
+pytest RandezVousUITests/Tests/web --browser=firefox --headless
+```
 
-- If you want to run all the tests then run this command: "pytest RandezVousUITests"
+### Useful flags
 
-- If you want to run only a specific test then you have to type the command above and the directory of where it is located
-  - ex. "pytest RandezVousUITests/tests/ios/suite_quest_activity/tst_complete_quest_from_login/test.py"
+| Flag | Effect |
+|---|---|
+| `-s` | Show `print()` output live, even for passing tests |
+| `-v` | Verbose — list each test's name and result, not just dots |
+| `--maxfail=1` | Stop the whole run at the first failure |
+| `-k "name"` | Run only tests whose name matches |
 
-- If you want to run it by name then you can run this command and keep the quotes around Name of Test: pytest -k "Name of Test"
+Combine as needed, e.g. `pytest -s -v --maxfail=1 RandezVousUITests/Tests/web`.
 
-- If you want to run all tests then from the same directory above run this command: "pytest RandezVousUITests/tests/"
-
-### Running a Test headless
-
-- If you don't want to run a test using the simulator, you must specify when running the test on the command line by adding "--headless" at the end of your test directory where the test lives
-  - ex. "pytest RandezVousUITests/tests/ios/suite_quest_activity/tst_complete_quest_from_login/test.py --headless"
-
-  
-### Helpful Pytest Commands & Flags
-
-When running tests from the command line, you can use these flags to customize your test execution and make debugging easier:
-
-- `-s` (Show Prints):** By default, pytest hides your `print()` statements if a test passes. Use this flag to force pytest to print all console logs in real-time.
-- `-v` (Verbose):** Provides a more detailed output in the terminal, listing the exact names of the tests that are passing or failing instead of just showing minimal dots.
-- `--maxfail=1` (Stop on First Failure):** Aborts the entire test run the moment a single test fails. This is incredibly useful for debugging without waiting for a long suite to finish.
-
-- Example Usage:
-To run a test with detailed logging and stop immediately if it fails, combine the flags:
-`pytest -s -v --maxfail=1`
+---
 
 ## Repository Structure
 
 ```
 RandezVousUITesting/
-├── .env.example                      # Required environment variables (copy → .env)
-├── .gitignore
-├── README.md
+├── .env.example                       # Required env vars for iOS tests (copy → .env)
+├── private/                           # Gitignored — never committed
+│   └── service-account-key.json       # Firebase Admin SDK key
+├── scripts/                           # Standalone Firebase admin / data-reset scripts
 │
-├── private/                          # Gitignored — never committed
-│   └── service-account-key.json      # Firebase Admin SDK key
-│
-├── scripts/                          # Standalone Firebase admin / data-reset scripts
-│
-└── RandezVousUITests/                # UI test suite root (run pytest from here)
-    ├── conftest.py                   # Appium server + driver fixtures (shared setup/teardown)
-    ├── pytest.ini                    # pytest config (test discovery settings)
+└── RandezVousUITests/                 # UI test suite root (run pytest from repo root)
+    ├── conftest.py                    # Fixtures: Appium/Selenium drivers, web dev-server lifecycle, cleanup
+    ├── pytest.ini                     # pytest config (test discovery, markers)
     │
-    ├── helpers/                      # Page Object Model classes, one file per screen/feature
-    │   ├── custom_quest_helper.py    # QuestHelper, CustomQuestPage
-    │   ├── edit_profile_helper.py
-    │   ├── experience_helper.py
-    │   ├── leaderboard_helper.py
-    │   ├── logger_helper.py
-    │   ├── login_page_helper.py      # LoginPageHelper, WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
-    │   ├── profile_helper.py
-    │   ├── quest_feed_helper.py
-    │   ├── quest_page_helper.py
-    │   ├── reset_test_setup_helper.py
-    │   └── sign_in_overlay_helper.py
+    ├── helpers/
+    │   ├── ios/                       # Page Object Model classes for Appium/XCUITest
+    │   │   ├── base_helper.py
+    │   │   ├── custom_quest_helper.py
+    │   │   ├── firebase_cleanup_helper.py
+    │   │   └── ...
+    │   └── web/                       # Page Object Model classes for Selenium
+    │       ├── base_helper.py         # Shared click()/is_visible() with stability waits
+    │       ├── homepage_helper.py
+    │       └── quest_helper.py
     │
-    └── tests/
-        └── suite_custom_quest_entry_point/
-            ├── tst_enter_custom_quest_on_dashboard/
-            ├── tst_joining_quest_after_logging_in/
-            ├── tst_joining_quest_through_url/
-            └── tst_log_in_with_code_entry_point/
+    └── Tests/
+        ├── ios/
+        │   ├── suite_Custom_Quest_Entry_Point/
+        │   └── suite_Quest_Activity/
+        └── web/
+            ├── suite_Custom_Quest_Entry_Point/
+            ├── suite_Domain_Specific_Tests/
+            └── suite_Quest_Activity/
 ```
+
+Each test lives at `Tests/<platform>/suite_<feature_area>/tst_<what_it_tests>/test.py`.
+
+---
 
 ## Adding Tests
 
 ### 1. Create the test directory
 
-Follow the naming convention — all `snake_case`:
-
 ```
-tests/suite_<feature_area>/tst_<what_it_tests>/test.py
+Tests/<ios|web>/suite_<feature_area>/tst_<what_it_tests>/test.py
 ```
 
-Example:
-
-```
-tests/suite_profile/tst_edit_display_name/test.py
-```
+Example: `Tests/web/suite_profile/tst_edit_display_name/test.py`
 
 ### 2. Write the test function
 
-Each `test.py` contains one test function named `test_<what_it_tests>`. Use a fixture from `conftest.py` as the argument:
+One test function per file, named `test_<what_it_tests>`. Take a driver fixture from `conftest.py` as the argument:
 
-| Fixture | Use when |
-|---|---|
-| `rv_driver` | App launches fresh (default) |
-| `rv_driver_no_reset` | App must preserve state from a previous session |
-| `safari_driver` | Test starts in Safari (URL deep-link flows) |
+| Fixture | Platform | Use when |
+|---|---|---|
+| `rv_driver` | iOS | App launches fresh (default) |
+| `rv_driver_no_reset` | iOS | App must preserve state from a previous session |
+| `safari_driver` | iOS | Test starts in mobile Safari (URL deep-link flows) |
+| `desktop_safari_driver` | Web | Any web test — despite the name, respects `--browser`/`--headless` |
 
 ### 3. Add helpers for new screens
 
-Create a new file in `helpers/` named after the screen or feature: `<screen_name>_helper.py`.
+Create a new file in `helpers/ios/` or `helpers/web/` named after the screen or feature: `<screen_name>_helper.py`.
 
 ---
 
@@ -177,25 +208,35 @@ Create a new file in `helpers/` named after the screen or feature: `<screen_name
 | Thing | Convention | Example |
 |---|---|---|
 | Test directories | `snake_case` | `tst_joining_quest_after_logging_in` |
-| Suite directories | `snake_case` | `suite_custom_quest_entry_point` |
-| Helper files | `snake_case` | `quest_page_helper.py` |
-| Helper classes | `PascalCase` | `CustomQuestPage` |
-| Locator attributes | `snake_case` class-level | `start_quest_button = (...)` |
+| Suite directories | `PascalCase`-ish, matches existing suites | `suite_Custom_Quest_Entry_Point` |
+| Helper files | `snake_case` | `quest_helper.py` |
+| Helper classes | `PascalCase` | `QuestHelper` |
+| Locator attributes | `snake_case`, set in `__init__` | `self.start_quest_button = (...)` |
 | Action methods | `snake_case` | `click_start_quest()` |
 | Test functions | `test_<snake_case>` | `test_joining_quest_after_logging_in` |
 
-### Helper class structure (Page Object Model)
+### Helper classes (Page Object Model)
 
-Each helper class follows three sections in order:
-
-- Locators are class-level attributes (not `self.` in `__init__`) so they can be inspected without instantiation.
-- Instance state (`driver`, `wait`) is set in `__init__`.
+- Locators are set on `self` in `__init__`, alongside the driver and a default `WebDriverWait`/`wait`.
 - Methods are actions only — no assertions inside helpers. Assertions belong in the test.
-- Use `AppiumBy.IOS_CLASS_CHAIN` for elements that lack a unique Accessibility ID. Use `AppiumBy.XPATH` only as a last resort.
-- When a standard `.click()` is unreliable (common on overlapping elements in XCUITest), use the native tap: `driver.execute_script('mobile: tap', {'element': el.id, 'x': 10, 'y': 10})`.
+- iOS: use `AppiumBy.IOS_CLASS_CHAIN` for elements without a unique Accessibility ID; `AppiumBy.XPATH` only as a last resort. When `.click()` is unreliable on overlapping elements, use the native tap: `driver.execute_script('mobile: tap', {'element': el.id, 'x': 10, 'y': 10})`.
+- Web: use `By`/`expected_conditions` from Selenium. Route clicks through `BaseHelper.click()` rather than raw `wait.until(...).click()` — it waits for the element's position to stop changing first, which raw waits don't (see [Known Quirks](#known-quirks)).
 
 ### Test functions
 
-- One test function per file, no setup/teardown in the test itself — that lives in `conftest.py`.
+- One test function per file; setup/teardown lives in `conftest.py`, not the test.
 - Prefer `assert` with a descriptive message over silent failures.
-- Conditional navigation (`if welcome.verify_welcome_modal_is_displayed()`) is acceptable for screens that only appear on first launch or after state changes.
+- Conditional navigation (e.g. `if welcome.verify_welcome_modal_is_displayed()`) is fine for screens that only appear on first launch or after state changes.
+
+---
+
+## Known Quirks
+
+A few non-obvious things learned the hard way, in case something breaks mysteriously:
+
+- **Click a button right after opening an accordion, and it silently fails.** `element_to_be_clickable` only checks displayed+enabled — not whether the element is still mid-CSS-transition (e.g. an accordion still animating open). `BaseHelper.click()` now waits for the element's on-screen position to stabilize first. Use it instead of raw `wait.until(...).click()`.
+- **A dev-run quest doesn't reflect a Firestore edit for up to 10 minutes.** `rvsite`'s backend caches quest data (`TTL.QUEST`). The dev-only `POST /api/local-admin/quest/:orgId/:questId/timing` endpoint updates a quest's `startTime`/`endTime` *and* invalidates that cache immediately — use it instead of writing to Firestore directly when a test needs to flip a quest's timing mid-run.
+- **A user "already joined" a quest, but `questHist` is missing.** `@pytest.mark.cleanup` only wipes the `questHist` *field* on the user doc — not the `questGrants` subcollection. `/api/quest/join` is idempotent: if a stale grant exists from an earlier run, it returns early and never rewrites `questHist`. Delete the leftover `questGrants/{questId}` doc before a test that needs a clean join.
+- **Login intermittently fails with `auth/network-request-failed`.** Documented but unresolved — happens rarely, cause not fully pinned down. Not fixed by retrying inside `HomepageHelper.login()`; a `retry_web_login` autouse fixture in `conftest.py` retries the whole login step for any web test if this happens.
+- **Safari has no headless mode and no `driver.get_log()`.** Both are Apple platform limitations, not something misconfigured. Use `--browser=chrome` or `--browser=firefox` if you need either.
+- **`rvsite`'s dev server behaves oddly after many restarts in one session.** If tests that used to pass start failing at the same early step (e.g. the homepage's "Find Quest" button never becoming clickable) with no code change, try clearing Vite's cache: `rm -rf /Users/omar/workspace/rvsite/node_modules/.vite`.
