@@ -1,9 +1,12 @@
-pytest==9.1.1
+# Pinned to the exact versions verified working on Python 3.9 -- several of
+# these packages' newer releases require Python 3.10+ (pytest 9.x,
+# google-auth 2.51+, and others untested here).
+pytest==8.4.2
 pytest-html==4.2.0
 selenium==4.32.0
-google-auth==2.56.3
-google-api-core==2.34.0
+google-auth==2.50.0
+google-api-core==2.30.3
 firebase-admin==7.5.0
-Appium-Python-Client==6.0.0
-python-dotenv==1.2.3
+Appium-Python-Client==5.3.1
+python-dotenv==1.2.1
 urllib3<2
