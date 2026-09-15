@@ -32,7 +32,7 @@ Automated UI test suite for RandezVous, built with [pytest](https://pytest.org).
 
 **Web tests**
 - Node.js (for running the `rvsite` dev servers)
-- A local checkout of `rvsite`, cloned to **exactly** `/Users/omar/workspace/rvsite` — this path is hardcoded in `conftest.py`'s `web_servers` fixture.
+- A local checkout of `rvsite` anywhere on disk. Set its path via `WEB_APP_PATH` in `.env` (defaults to `../../RandezVousSite/rvsite`, relative to wherever `pytest` is run from — see `.env.example`).
 - Safari (built in), and/or Chrome and/or Firefox if you want to run tests against them.
 
 ---
@@ -73,7 +73,7 @@ Save the downloaded JSON to `private/service-account-key.json` (gitignored; the 
 
 Web tests drive a **real local `rvsite` dev server** — they don't hit any deployed environment.
 
-- Clone `rvsite` to `/Users/omar/workspace/rvsite` and run `npm install` there.
+- Clone `rvsite` anywhere and run `npm install` there, then point `WEB_APP_PATH` (in this repo's `.env`) at it.
 - `rvsite` needs its own `.env` configured (Firebase client config, App Check debug token, etc.) — see `rvsite`'s own `.env.example`.
 - `npm start` in `rvsite` now points at its QA target (port 5174) — the test harness instead runs `npm run start:prod`, which — despite the name — is the plain local-dev setup (regular `.env`, port 5173) these tests are built around. You don't need to run anything manually; `conftest.py` starts and stops both servers automatically per test session.
 
@@ -238,4 +238,4 @@ A few non-obvious things learned the hard way, in case something breaks mysterio
 - **A user "already joined" a quest, but `questHist` is missing.** `@pytest.mark.cleanup` only wipes the `questHist` *field* on the user doc — not the `questGrants` subcollection. `/api/quest/join` is idempotent: if a stale grant exists from an earlier run, it returns early and never rewrites `questHist`. Delete the leftover `questGrants/{questId}` doc before a test that needs a clean join.
 - **Login intermittently fails with `auth/network-request-failed`.** Documented but unresolved — happens rarely, cause not fully pinned down. Not fixed by retrying inside `HomepageHelper.login()`; a `retry_web_login` autouse fixture in `conftest.py` retries the whole login step for any web test if this happens.
 - **Safari has no headless mode and no `driver.get_log()`.** Both are Apple platform limitations, not something misconfigured. Use `--browser=chrome` or `--browser=firefox` if you need either.
-- **`rvsite`'s dev server behaves oddly after many restarts in one session.** If tests that used to pass start failing at the same early step (e.g. the homepage's "Find Quest" button never becoming clickable) with no code change, try clearing Vite's cache: `rm -rf /Users/omar/workspace/rvsite/node_modules/.vite`.
+- **`rvsite`'s dev server behaves oddly after many restarts in one session.** If tests that used to pass start failing at the same early step (e.g. the homepage's "Find Quest" button never becoming clickable) with no code change, try clearing Vite's cache: `rm -rf <rvsite>/node_modules/.vite`.
