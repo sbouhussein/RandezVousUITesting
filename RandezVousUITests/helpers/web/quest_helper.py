@@ -40,6 +40,7 @@ class QuestHelper(BaseHelper):
         self.complete_activity_button = (By.XPATH, "//button[normalize-space()='Complete Activity']")
         self.prompt_activity_details_button = (By.XPATH, "//button[@aria-label='View details for Prompt Activity']")
         self.activity_completed_indicator = (By.XPATH,"//div[contains(@class, 'bg-green-50') and normalize-space()='Activity Completed']")
+        self.quest_completed_message = (By.XPATH, "//p[normalize-space()='Congratulations on completing your quest!']")
 
     def enter_quest_code(self, code):
         """Waits for the input field to be clickable, clears it, and types the code."""
@@ -62,39 +63,37 @@ class QuestHelper(BaseHelper):
 
     def complete_trivia_activity(self, response):
         print("click and complete trivia activity")
-        self.wait.until(EC.element_to_be_clickable(self.trivia_activity_locator)).click()
-        self.wait.until(EC.element_to_be_clickable(self.complete_trivia_button)).click()
-        textarea = self.wait.until(EC.element_to_be_clickable(self.text_box))
-        textarea.click()
+        self.click(self.trivia_activity_locator)
+        self.click(self.complete_trivia_button)
+        textarea = self.click(self.text_box)
         textarea.clear()
         print("Entering response")
         textarea.send_keys(response)
-        self.wait.until(EC.element_to_be_clickable(self.complete_activity_button)).click()
+        self.click(self.complete_activity_button)
 
     def complete_prompt_activity(self, response):
         print("click and complete prompt activity")
         self.click(self.prompt_activity_locator)
         self.click(self.complete_prompt_button)
         textarea = self.click(self.text_box)
-        textarea.click()
         textarea.clear()
         print("Entering response")
         textarea.send_keys(response)
-        self.wait.until(EC.element_to_be_clickable(self.complete_activity_button)).click()
+        self.click(self.complete_activity_button)
 
     def complete_honor_activity(self):
         print("click and complete honor activity")
         self.click(self.honor_activity_locator)
         self.click(self.complete_honor_button)
         self.click(self.honor_code_checkbox)
-        self.wait.until(EC.element_to_be_clickable(self.complete_activity_button)).click()
+        self.click(self.complete_activity_button)
 
     def complete_photo_activity(self):
         print("click and complete photo activity")
         self.click(self.photo_activity_locator)
         self.click(self.complete_photo_button)
         self.upload_photo()
-        self.wait.until(EC.element_to_be_clickable(self.complete_activity_button)).click()
+        self.click(self.complete_activity_button)
 
     def upload_photo(self, file_name="test_image.jpg"):
 
@@ -111,18 +110,15 @@ class QuestHelper(BaseHelper):
     def complete_location_activity(self, fail_check = False):
         print("click and complete location activity")
         self.click(self.location_activity_locator)
-        print("here")
         self.click(self.complete_location_button)
-        print("here2")
         self.click(self.check_location_button)
-        print("here3")
 
         if fail_check:
             print("Fail check")
             assert self.is_visible(self.location_error_message, custom_timeout=3)
 
         else:
-            self.wait.until(EC.element_to_be_clickable(self.complete_activity_button)).click()
+            self.click(self.complete_activity_button)
 
     def mock_geo_location(self, dv, lat, long):
         mock_location_js = f"""
@@ -183,14 +179,23 @@ class QuestHelper(BaseHelper):
         self.complete_location_activity()
 
     def verify_quest_completion(self):
+        """Waits for the completion banner (auto-finish fires ~2.5s after
+        requirements are met, so give it more room than the default wait)."""
         print("Verifying the quest is complete")
+        return self.is_visible(self.quest_completed_message, custom_timeout=15)
 
     def verify_activity_completion(self, activity_name):
         print(f"Clicking details for activity: {activity_name}")
         dynamic_locator = (By.XPATH, f"//button[@aria-label='View details for {activity_name} Activity']")
         self.click(dynamic_locator)
         print("Verifying Activity Completion")
-        return self.is_visible(self.activity_completed_indicator, custom_timeout=3)
+        result = self.is_visible(self.activity_completed_indicator, custom_timeout=3)
+        # "View details" navigates to its own sub-route; go back to the base
+        # quest page for whatever's checked next. Best-effort: if this was
+        # the quest's last activity, the completion screen may cover it.
+        self.driver.back()
+        self.is_visible(dynamic_locator, custom_timeout=5)
+        return result
 
     def is_trivia_error_visible(self):
         return self.is_visible(self.trivia_error_message, custom_timeout=3)

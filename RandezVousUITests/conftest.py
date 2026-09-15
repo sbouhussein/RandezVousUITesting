@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from firebase_admin import credentials
 from pathlib import Path
 
-from selenium.common import InvalidSessionIdException
+from selenium.common import InvalidSessionIdException, TimeoutException
 from selenium import webdriver
 from appium import webdriver as appium_webdriver
 from selenium.webdriver.support.wait import WebDriverWait
@@ -18,6 +18,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 
 from helpers.ios.firebase_cleanup_helper import cleanup_user_data
+from helpers.web.homepage_helper import HomepageHelper
 import socket
 import subprocess
 
@@ -34,7 +35,9 @@ WEB_APP_PATH = os.getenv("WEB_APP_PATH", "../../RandezVousSite/rvsite")
 
 def pytest_addoption(parser):
     parser.addoption("--udid", action="store", default="booted", help="UDID of the iOS Simulator")
-    parser.addoption("--headless", action="store_true", help="Run the simulator in headless mode")
+    parser.addoption("--headless", action="store_true", help="Run the simulator/browser in headless mode")
+    parser.addoption("--browser", action="store", default="safari", choices=["safari", "chrome", "firefox"],
+                      help="Desktop browser for web tests (Safari has no headless mode)")
 
 def is_port_in_use(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -135,11 +138,46 @@ def rv_driver(request, appium_server):
         print(f"\n⚠️ Ignored driver teardown error: {e}")
 
 
+def _build_desktop_driver(browser, headless):
+    if browser == "safari":
+        if headless:
+            raise RuntimeError("Safari has no headless mode -- use --browser=chrome or firefox with --headless.")
+        return webdriver.Safari()
+    if browser == "chrome":
+        options = webdriver.ChromeOptions()
+        if headless:
+            # maximize_window() has no real screen to expand to headless, so
+            # it leaves Chrome at its small default viewport (~800x600),
+            # which triggers a different responsive layout than every other
+            # mode runs against -- pin a real desktop size instead.
+            options.add_argument("--headless=new")
+            options.add_argument("--window-size=1920,1080")
+        return webdriver.Chrome(options=options)
+    if browser == "firefox":
+        options = webdriver.FirefoxOptions()
+        if headless:
+            options.add_argument("-headless")
+            options.add_argument("--width=1920")
+            options.add_argument("--height=1080")
+        return webdriver.Firefox(options=options)
+    raise ValueError(f"Unknown browser: {browser}")
+
+
 @pytest.fixture
-def desktop_safari_driver():
-    """Launches the native Desktop Safari browser on macOS."""
-    driver = webdriver.Safari()
-    driver.maximize_window()
+def desktop_safari_driver(request):
+    """Launches the desktop browser selected via --browser (default: safari).
+    Selenium Manager auto-provisions chromedriver/geckodriver -- Chrome or
+    Firefox just need to be installed."""
+    browser = request.config.getoption("--browser")
+    headless = request.config.getoption("--headless")
+    driver = _build_desktop_driver(browser, headless)
+    if headless:
+        # maximize_window() has no real screen to expand to headless and can
+        # override the --window-size startup arg with something tiny --
+        # the fixed size set at launch is already what we want.
+        driver.set_window_size(1920, 1080)
+    else:
+        driver.maximize_window()
 
     # 2. Perform the initial navigation
     print("\nNavigating to http://localhost:5173")
@@ -374,67 +412,105 @@ def pytest_sessionfinish(session, exitstatus):
     print(f"\n📊 Refined Dashboard Summary Generated At: {report_path}")
 
 
+@pytest.fixture(scope="session")
+def web_servers():
+    """Starts the rvsite backend + Vite dev server once per session. Output
+    goes to a log file, not an unread PIPE (that used to fill up and block
+    the dev server mid-request)."""
+    print("\n--- [Web Test] Cleaning up Node processes on port 3000 and 5173 ---")
+    subprocess.run(["npx", "kill-port", "3000", "5173"], capture_output=True)
+
+    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Tests", "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    web_log_path = os.path.join(log_dir, "web_servers.log")
+    web_log_fd = open(web_log_path, "w")
+
+    # start:prod, despite the name, is the plain local-dev setup (.env, port
+    # 5173) this suite needs -- `npm start` now points at QA (port 5174).
+    print(f"--- [Web Test] Starting backend and React servers via npm run start:prod (logs: {web_log_path}) ---")
+    backend_process = subprocess.Popen(
+        ["npm", "run", "start:prod"],
+        cwd=WEB_APP_PATH,
+        stdout=web_log_fd,
+        stderr=subprocess.STDOUT,
+    )
+
+    def wait_until_up(url, timeout=45):
+        start = time.time()
+        while time.time() - start < timeout:
+            try:
+                if requests.get(url).status_code < 500:
+                    return True
+            except requests.exceptions.ConnectionError:
+                pass
+            time.sleep(0.5)
+        return False
+
+    print("--- [Web Test] Waiting for backend on port 3000... ---")
+    if not wait_until_up("http://localhost:3000/api/user/profile"):
+        backend_process.terminate()
+        web_log_fd.close()
+        raise RuntimeError(f"Backend failed to start on port 3000 within timeout. See {web_log_path}")
+
+    print("--- [Web Test] Backend ready. Waiting for React frontend on port 5173... ---")
+    if not wait_until_up("http://localhost:5173"):
+        backend_process.terminate()
+        web_log_fd.close()
+        raise RuntimeError(f"Vite frontend failed to start on port 5173 within timeout. See {web_log_path}")
+
+    # Best-effort warm-up: pull the index shell for the routes the tests hit
+    # first so Vite's dev-time transform has a head start before test one.
+    for path in ("/", "/login", "/find-quest"):
+        try:
+            requests.get(f"http://localhost:5173{path}", timeout=10)
+        except requests.exceptions.RequestException:
+            pass
+
+    print("--- [Web Test] Both servers are ready! ---\n")
+
+    yield backend_process
+
+    print("\n--- [Web Test] Teardown: Killing background servers ---")
+    backend_process.terminate()
+    backend_process.wait()
+    web_log_fd.close()
+    subprocess.run(["npx", "kill-port", "3000", "5173"], capture_output=True)
+
+
 @pytest.fixture(scope="function", autouse=True)
 def restart_node_server_for_web(request):
+    """Ensure the shared web servers are running for any test under Tests/web/."""
     test_path = str(request.node.fspath)
     if "/web/" not in test_path:
         yield
         return
 
-    print("\n--- [Web Test] Cleaning up Node processes on port 3000 and 5173 ---")
-    subprocess.run(["npx", "kill-port", "3000", "5173"], capture_output=True)
-
-    print("--- [Web Test] Starting backend and React servers via npm start ---")
-    # Starts both backend and Vite dev server concurrently
-    backend_process = subprocess.Popen(
-        ["npm", "start"],
-        cwd=WEB_APP_PATH,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
-    )
-
-    print("--- [Web Test] Waiting for backend on port 3000... ---")
-    timeout = 20
-    start_time = time.time()
-    backend_ready = False
-
-    while time.time() - start_time < timeout:
-        try:
-            response = requests.get("http://localhost:3000/api/user/profile")
-            if response.status_code < 500:
-                backend_ready = True
-                break
-        except requests.exceptions.ConnectionError:
-            time.sleep(0.5)
-
-    if not backend_ready:
-        backend_process.terminate()
-        raise RuntimeError("Backend failed to start on port 3000 within timeout.")
-
-    print("--- [Web Test] Backend ready. Waiting for React frontend on port 5173... ---")
-
-    vite_ready = False
-    vite_start = time.time()
-
-    while time.time() - vite_start < timeout:
-        try:
-            # Just ping the base URL to ensure the port is alive
-            frontend_response = requests.get("http://localhost:5173")
-            if frontend_response.status_code == 200:
-                vite_ready = True
-                break
-        except requests.exceptions.ConnectionError:
-            time.sleep(0.5)
-
-    if not vite_ready:
-        backend_process.terminate()
-        raise RuntimeError("Vite frontend failed to start on port 5173 within timeout.")
-
-    print("--- [Web Test] Both servers are ready! ---\n")
-
+    request.getfixturevalue("web_servers")
     yield
 
-    print("\n--- [Web Test] Teardown: Killing background servers ---")
-    backend_process.terminate()
-    backend_process.wait()
-    subprocess.run(["npx", "kill-port", "3000", "5173"], capture_output=True)
+
+@pytest.fixture(scope="function", autouse=True)
+def retry_web_login(request, monkeypatch):
+    """Retries HomepageHelper.login() for web tests if sign-in gets stuck
+    (raises TimeoutException), reloading the homepage before each retry.
+    Wraps login() only for the test's duration -- the method itself is
+    untouched."""
+    test_path = str(request.node.fspath)
+    if "/web/" not in test_path:
+        yield
+        return
+
+    original_login = HomepageHelper.login
+
+    def login_with_retry(self, email, password, attempts=3):
+        for attempt in range(1, attempts + 1):
+            try:
+                return original_login(self, email, password)
+            except TimeoutException:
+                if attempt == attempts:
+                    raise
+                print(f"Sign-in appears stuck (attempt {attempt}/{attempts}); reloading and retrying...")
+                self.driver.get("http://localhost:5173")
+
+    monkeypatch.setattr(HomepageHelper, "login", login_with_retry)
+    yield

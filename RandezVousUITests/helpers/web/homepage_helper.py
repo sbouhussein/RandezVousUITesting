@@ -1,3 +1,5 @@
+import time
+
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -7,10 +9,15 @@ from helpers.web.quest_helper import QuestHelper
 class HomepageHelper:
     def __init__(self, driver):
         self.driver = driver
-        self.wait = WebDriverWait(self.driver, 10)
+        # /login is a lazy React Router 7 route: after a full navigation the app
+        # re-hydrates, shows a spinner, and only mounts the auth form once
+        # useAuth() finishes initializing. On a freshly (re)started Vite dev
+        # server that first paint can take well over 10s, so give it room.
+        self.wait = WebDriverWait(self.driver, 30)
 
         self.find_quest_button = (By.XPATH, "//*[contains(text(), 'Find Quest')]")
         self.login_button = (By.CSS_SELECTOR, "a.bg-primary-green[href*='/login']")
+        self.route_spinner = (By.CSS_SELECTOR, ".animate-spin")
         self.email_input_button = (By.XPATH, "//input[@id='auth-email']")
         self.password_input_button = (By.XPATH, "//input[@id='auth-password']")
         self.sign_in_button = (By.XPATH, "//button[@type='submit' and normalize-space()='Sign In']")
@@ -32,6 +39,22 @@ class HomepageHelper:
     def click_login_button(self):
         print("Clicking login button")
         self.driver.get("http://localhost:5173/login")
+        self._wait_for_login_form()
+
+    def _wait_for_login_form(self):
+        """Waits out the RR7 hydrate/route spinner, then for the auth form.
+
+        Navigating straight to /login reloads the page; React Router 7 shows a
+        RouteSpinner while it hydrates and code-splits LoginPage, and the
+        component itself renders only a spinner until useAuth() resolves. The
+        #auth-email input does not exist in the DOM until all of that is done.
+        """
+        print("Waiting for login form to finish loading...")
+        try:
+            self.wait.until(EC.invisibility_of_element_located(self.route_spinner))
+        except TimeoutException:
+            print("Route spinner still visible; looking for the form anyway.")
+        self.wait.until(EC.element_to_be_clickable(self.email_input_button))
 
     ### Joining quest from URL ###
     def click_guest_button(self):
@@ -69,6 +92,4 @@ class HomepageHelper:
         self.enter_email(email)
         self.enter_password(password)
         self.click_sign_in()
-
-
 
