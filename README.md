@@ -75,7 +75,6 @@ Web tests drive a **real local `rvsite` dev server** — they don't hit any depl
 
 - Clone `rvsite` to `/Users/omar/workspace/rvsite` and run `npm install` there.
 - `rvsite` needs its own `.env` configured (Firebase client config, App Check debug token, etc.) — see `rvsite`'s own `.env.example`.
-- ⚠️ **Requires the `uitest` branch of `rvsite`, not `main`:** `tst_complete_expired_quest` depends on a dev-only endpoint, `POST /api/local-admin/quest/:orgId/:questId/timing` (`backend/routes/local-admin.js`), plus a matching `allowEnded` change in `backend/routes/activities.js` and a `hasJoined` change in `src/components/QuestDetail.jsx`. These live on [`rvsite`'s `uitest` branch](https://github.com/sbouhussein/rvsite/pull/new/uitest), not `main` — the latter two are real user-facing behavior changes (not just test infra) and need product sign-off before merging. Run `rvsite` on `uitest` for that one test to pass; on `main` it'll fail with the quest correctly still blocked.
 - `npm start` in `rvsite` now points at its QA target (port 5174) — the test harness instead runs `npm run start:prod`, which — despite the name — is the plain local-dev setup (regular `.env`, port 5173) these tests are built around. You don't need to run anything manually; `conftest.py` starts and stops both servers automatically per test session.
 
 ---
