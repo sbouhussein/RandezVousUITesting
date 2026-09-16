@@ -24,8 +24,6 @@ def test_complete_quest(desktop_safari_driver):
     nav.login(email, password)
     nav.find_quest(quest_code)
 
-    # Injected after login/find_quest on purpose: login() does a full page
-    # navigation (driver.get), which wipes any JS mock injected before it.
     print("Injecting bulletproof geolocation mock...")
     quest.mock_geo_location(desktop_safari_driver, latitude, longitude)
 

@@ -3,7 +3,6 @@ import time
 import requests
 
 import pytest
-from firebase_admin import auth as fb_auth, firestore
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -38,13 +37,6 @@ def _wait_until_joined(driver, quest_id, timeout=15):
     raise TimeoutError(f"questHist['{quest_id}'] never appeared -- join didn't land.")
 
 
-def _clear_stale_grant(email, quest_id):
-    """Deletes any leftover questGrants doc: join() is idempotent, so a
-    grant left from an earlier run would skip rewriting questHist."""
-    uid = fb_auth.get_user_by_email(email).uid
-    firestore.client().collection("Users").document(uid).collection("questGrants").document(quest_id).delete()
-
-
 @pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
 def test_complete_expired_quest(desktop_safari_driver):
     """Expiration blocks new participation, not a returning user finishing
@@ -57,7 +49,6 @@ def test_complete_expired_quest(desktop_safari_driver):
     nav = HomepageHelper(desktop_safari_driver)
     quest = QuestHelper(desktop_safari_driver)
 
-    _clear_stale_grant(email, QUEST_ID)
     _set_quest_end_time(FUTURE_END_TIME)
     try:
         print("--- Phase 1: active -- join only ---")
@@ -84,3 +75,5 @@ def test_complete_expired_quest(desktop_safari_driver):
         assert quest.verify_quest_completion() is True
     finally:
         _set_quest_end_time(EXPIRED_END_TIME)
+
+    # Test a user who has the quest complete. and gives the user the grant and manually complete the 2 activities by updating the db and validate that the user can complete quest button or it will automatically pop up even if the end date has passed. the rule is that you can complete the expired quest only if you have completed all activities before it expired or achieved points to win
