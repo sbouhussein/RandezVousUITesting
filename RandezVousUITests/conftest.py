@@ -30,8 +30,11 @@ DEVICE_NAME = os.getenv("DEVICE_NAME", "iPhone 17 Pro")
 PLATFORM_VERSION = os.getenv("PLATFORM_VERSION", "26.4")
 RV_BUNDLE_ID = os.getenv("RV_BUNDLE_ID", "sbouhussein.github.io-rvsite.RandezVous")
 SAFARI_BUNDLE_ID = os.getenv("SAFARI_BUNDLE_ID", "com.apple.mobilesafari")
+ANDROID_DEVICE_NAME = os.getenv("ANDROID_DEVICE_NAME", "Pixel_8_API_34")
+ANDROID_PLATFORM_VERSION = os.getenv("ANDROID_PLATFORM_VERSION", "14")
 APP_CHECK_DEBUG_TOKEN = os.getenv("FIREBASE_APP_CHECK_DEBUG_TOKEN")
 WEB_APP_PATH = os.getenv("WEB_APP_PATH", "../../RandezVousSite/rvsite")
+REPORT_RETENTION_COUNT = int(os.getenv("REPORT_RETENTION_COUNT", "20"))
 
 def pytest_addoption(parser):
     parser.addoption("--udid", action="store", default="booted", help="UDID of the iOS Simulator")
@@ -65,11 +68,30 @@ def appium_server():
     os.makedirs(log_dir, exist_ok=True)
     log_fd = open(os.path.join(log_dir, "appium_server.log"), "w")
 
+    appium_env = os.environ.copy()
+    # The UiAutomator2 driver needs ANDROID_HOME/ANDROID_SDK_ROOT set on the Appium
+    # *server* process itself -- adb being on PATH isn't enough. Default to Android
+    # Studio's standard macOS install location so android_chrome_driver works without
+    # every machine needing its own shell profile edit.
+    if "ANDROID_HOME" not in appium_env and "ANDROID_SDK_ROOT" not in appium_env:
+        default_sdk = os.path.expanduser("~/Library/Android/sdk")
+        if os.path.isdir(default_sdk):
+            appium_env["ANDROID_HOME"] = default_sdk
+            appium_env["ANDROID_SDK_ROOT"] = default_sdk
+
     process = subprocess.Popen(
-        ["appium", "--port", APPIUM_PORT, "--log-level", "info"],
+        # --allow-insecure uiautomator2:chromedriver_autodownload: chromedriver
+        # auto-download is an "insecure feature" Appium disables by default -- without
+        # this flag, the appium:chromedriverAutodownload capability (android_chrome_driver)
+        # is silently ignored and Chrome sessions fail with "No Chromedriver found".
+        # Appium 3.x requires the driver name (or '*') prefix -- the bare feature name
+        # is rejected at startup ("must include ... automation name or the '*' wildcard").
+        ["appium", "--port", APPIUM_PORT, "--log-level", "info",
+         "--allow-insecure", "uiautomator2:chromedriver_autodownload"],
         stdout=log_fd,
         stderr=log_fd,
         preexec_fn=os.setsid,
+        env=appium_env,
     )
 
     time.sleep(5)
@@ -163,6 +185,42 @@ def _build_desktop_driver(browser, headless):
     raise ValueError(f"Unknown browser: {browser}")
 
 
+# rvsite's detectPlatform() (src/utils/platformUtils.js) reads navigator.userAgent,
+# which Selenium can only override on Chrome -- Safari/Firefox don't expose a
+# capability for it. Android is used (not iOS) because QuestOnboarding's
+# AppActionCard puts the fallback URL we test directly in the "Open in App"
+# link's href only on Android; iOS uses the raw custom-scheme deep link there
+# instead and only consults the fallback URL inside a blur-timeout callback.
+MOBILE_ANDROID_USER_AGENT = (
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
+)
+
+
+@pytest.fixture
+def mobile_chrome_driver(request):
+    """Chrome pinned to a mobile user-agent, so rvsite treats it as a phone
+    browser (QuestOnboarding's AppActionCard) instead of desktop. Unlike
+    desktop_safari_driver, doesn't wait for a login form on load -- tests
+    using this fixture navigate straight to a quest URL, signed in or not."""
+    headless = request.config.getoption("--headless")
+    options = webdriver.ChromeOptions()
+    options.add_argument(f"--user-agent={MOBILE_ANDROID_USER_AGENT}")
+    options.add_argument("--window-size=430,932")
+    if headless:
+        options.add_argument("--headless=new")
+    driver = webdriver.Chrome(options=options)
+
+    driver.get("http://localhost:5173")
+    wait = WebDriverWait(driver, 10)
+    wait.until(lambda d: d.execute_script("return document.readyState") == "complete")
+    driver.execute_script("window.localStorage.clear();")
+    driver.execute_script("window.sessionStorage.clear();")
+
+    yield driver
+    driver.quit()
+
+
 @pytest.fixture
 def desktop_safari_driver(request):
     """Launches the desktop browser selected via --browser (default: safari).
@@ -214,7 +272,10 @@ def safari_driver(request, appium_server):
     target_udid = request.config.getoption("--udid")
     target_headless = request.config.getoption("--headless")
 
-    driver = webdriver.Remote(
+    # appium_webdriver.Remote (not plain selenium.webdriver.Remote) -- hybrid/webview
+    # interaction needs the .contexts / switch_to.context() extensions it adds; see
+    # BaseHelper.switch_to_webview.
+    driver = appium_webdriver.Remote(
         APPIUM_SERVER_URL,
         options=_build_options(SAFARI_BUNDLE_ID, target_udid, is_headless=target_headless)
     )
@@ -225,6 +286,97 @@ def safari_driver(request, appium_server):
         driver.quit()
     except Exception as e:
         print(f"\n Ignored driver teardown error: {e}")
+
+
+def _get_android_serial():
+    """Resolves which adb-visible emulator/device to target. ANDROID_UDID pins a specific
+    one; otherwise falls back to whichever single device `adb devices` reports."""
+    env_serial = os.getenv("ANDROID_UDID")
+    if env_serial:
+        return env_serial
+
+    try:
+        output = subprocess.run(["adb", "devices"], capture_output=True, text=True, check=True).stdout
+    except FileNotFoundError:
+        raise RuntimeError(
+            "adb not found on PATH -- install Android SDK platform-tools (bundled with "
+            "Android Studio) and add it to PATH, or point PATH at $ANDROID_HOME/platform-tools."
+        )
+
+    serials = [
+        line.split()[0] for line in output.strip().splitlines()[1:]
+        if line.strip().endswith("device")
+    ]
+    if not serials:
+        raise RuntimeError(
+            "No Android emulator/device detected by adb. Start an AVD from Android "
+            "Studio's Device Manager (or `emulator -avd <name>`) before running Android "
+            "web tests."
+        )
+    if len(serials) > 1:
+        raise RuntimeError(
+            f"Multiple adb devices detected ({', '.join(serials)}) -- set ANDROID_UDID "
+            "in .env to pick one."
+        )
+    return serials[0]
+
+
+def _adb_reverse_web_ports(serial, remove=False):
+    """Android emulators treat 'localhost' as themselves, not the host machine -- forward
+    the emulator's loopback ports to the host's Vite/backend servers so BASE_URL
+    ("http://localhost:5173", quest_test_data.py) resolves the same as every other web
+    driver."""
+    if remove:
+        subprocess.run(["adb", "-s", serial, "reverse", "--remove-all"], capture_output=True)
+        return
+    for port in ("3000", "5173"):
+        subprocess.run(["adb", "-s", serial, "reverse", f"tcp:{port}", f"tcp:{port}"], check=True)
+
+
+def _build_android_chrome_options(serial):
+    options = AppiumOptions()
+    options.set_capability("platformName", "Android")
+    options.set_capability("appium:automationName", "UiAutomator2")
+    options.set_capability("appium:deviceName", ANDROID_DEVICE_NAME)
+    options.set_capability("appium:platformVersion", ANDROID_PLATFORM_VERSION)
+    options.set_capability("appium:udid", serial)
+    options.set_capability("browserName", "Chrome")
+    # Auto-fetches the chromedriver build matching the emulator image's system Chrome --
+    # avoids hand-pinning a chromedriver version per AVD.
+    options.set_capability("appium:chromedriverAutodownload", True)
+    options.set_capability("appium:newCommandTimeout", 120)
+    return options
+
+
+@pytest.fixture
+def android_chrome_driver(appium_server):
+    """Real mobile Chrome on an Android emulator/device via Appium's UiAutomator2 driver --
+    the Android counterpart to safari_driver. Unlike mobile_chrome_driver's user-agent
+    trick on desktop Chrome, this is an actual Android browser, so it exercises real
+    intent-link resolution for QuestOnboarding's "Open in App" behavior. RV's TWA
+    (com.randezvous.RandezVous, live on Google Play -- see
+    rvsite/public/.well-known/assetlinks.json) could later be driven directly by swapping
+    the browserName capability for appPackage/appActivity.
+
+    appium_webdriver.Remote (not plain selenium.webdriver.Remote) -- hybrid/webview
+    interaction needs the .contexts / switch_to.context() extensions it adds; see
+    BaseHelper.switch_to_webview.
+    """
+    serial = _get_android_serial()
+    _adb_reverse_web_ports(serial)
+
+    driver = appium_webdriver.Remote(
+        APPIUM_SERVER_URL,
+        options=_build_android_chrome_options(serial)
+    )
+
+    yield driver
+
+    try:
+        driver.quit()
+    except Exception as e:
+        print(f"\n Ignored driver teardown error: {e}")
+    _adb_reverse_web_ports(serial, remove=True)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -262,6 +414,33 @@ html_results = []
 # Global storage to aggregate logs, statuses, and steps across ALL test phases
 _compiled_test_results = {}
 
+_DRIVER_FIXTURE_NAMES = (
+    "rv_driver",
+    "rv_driver_no_reset",
+    "safari_driver",
+    "desktop_safari_driver",
+    "mobile_chrome_driver",
+    "android_chrome_driver",
+    "driver",
+)
+
+
+def _get_active_driver(item):
+    for fixture_name in _DRIVER_FIXTURE_NAMES:
+        driver = item.funcargs.get(fixture_name)
+        if driver:
+            return driver
+    return None
+
+
+def _platform_for_nodeid(nodeid):
+    if "/tests/ios/" in nodeid or "\\tests\\ios\\" in nodeid:
+        return "iOS"
+    if "/tests/web/" in nodeid or "\\tests\\web\\" in nodeid:
+        return "Web"
+    return "Other"
+
+
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     """Captures test results, aggregated logs, and screenshots across all phases"""
@@ -272,11 +451,13 @@ def pytest_runtest_makereport(item, call):
     if nodeid not in _compiled_test_results:
         _compiled_test_results[nodeid] = {
             "name": item.name,
+            "platform": _platform_for_nodeid(nodeid),
             "status": "PASSED",
             "logs": "",
             "error_msg": "",
             "failure_line": "",
             "screenshot_b64": "",
+            "screenshot_label": "End State",
             "duration": 0.0
         }
 
@@ -287,13 +468,16 @@ def pytest_runtest_makereport(item, call):
         phase_header = f"--- [{report.when.upper()} PHASE] ---\n"
         test_entry["logs"] += phase_header + report.capstdout.strip() + "\n\n"
 
+    if report.skipped and test_entry["status"] == "PASSED":
+        test_entry["status"] = "SKIPPED"
+
     if report.failed:
         test_entry["status"] = "FAILED"
 
         if call.excinfo:
             test_entry["error_msg"] = str(call.excinfo.value)
             try:
-                # 🎯 NEW LOGIC: Walk backwards through the stacktrace
+                # Walk backwards through the stacktrace to find the first frame in our own code
                 target_frame = None
                 for frame in reversed(call.excinfo.traceback):
                     frame_path = str(frame.path)
@@ -311,21 +495,49 @@ def pytest_runtest_makereport(item, call):
                 line_number = target_frame.lineno + 1
                 offending_code = str(target_frame.statement).strip()
 
-                test_entry["failure_line"] = f"📍 File: {file_name} | Line: {line_number}\n➔ Code: {offending_code}"
+                test_entry["failure_line"] = f"File: {file_name} | Line: {line_number}\nCode: {offending_code}"
             except Exception:
-                test_entry["failure_line"] = "⚠️ Could not parse the exact line of failure."
+                test_entry["failure_line"] = "Could not parse the exact line of failure."
 
-        driver = item.funcargs.get('rv_driver') or item.funcargs.get('driver')
-        if driver and not test_entry["screenshot_b64"]:
+    # Capture a screenshot of the app/page state at the end of the "call" phase,
+    # regardless of outcome, so passing runs are visually verifiable too, not
+    # just failures. This runs before teardown fixtures tear the driver down.
+    if report.when == "call":
+        driver = _get_active_driver(item)
+        if driver:
             try:
                 test_entry["screenshot_b64"] = driver.get_screenshot_as_base64()
+                test_entry["screenshot_label"] = "State At Failure" if report.failed else "End State"
             except Exception as e:
-                print(f"Failed to capture frame: {e}")
+                print(f"Failed to capture end-state screenshot: {e}")
+
+
+def _git(*args):
+    try:
+        return subprocess.check_output(
+            ["git", *args], stderr=subprocess.DEVNULL, text=True
+        ).strip()
+    except Exception:
+        return ""
+
+
+def _prune_old_reports(reports_dir, keep_count):
+    """Reports embed screenshots as base64, so each file can run 1-2MB+.
+    Keep only the most recent `keep_count` reports; delete the rest."""
+    reports = sorted(
+        Path(reports_dir).glob("Execution_Report_*.html"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    for stale in reports[keep_count:]:
+        try:
+            stale.unlink()
+        except OSError:
+            pass
 
 
 def pytest_sessionfinish(session, exitstatus):
     """Compiles results and saves the dashboard into a dedicated reports directory"""
-    # 📁 Requirement 3: Change directory to an isolated 'reports' folder
     reports_dir = os.path.join(session.config.rootdir, "reports")
     os.makedirs(reports_dir, exist_ok=True)
 
@@ -334,74 +546,384 @@ def pytest_sessionfinish(session, exitstatus):
 
     report_path = os.path.join(reports_dir, f"Execution_Report_{file_timestamp}.html")
 
-    # Generate html card blocks dynamically from our data dictionary
-    html_cards = []
-    total_passed = 0
-    total_failed = 0
+    git_branch = _git("rev-parse", "--abbrev-ref", "HEAD")
+    git_commit = _git("rev-parse", "--short", "HEAD")
 
-    for nodeid, data in _compiled_test_results.items():
-        is_failed = data["status"] == "FAILED"
-        if is_failed:
-            total_failed += 1
-            status_icon, border_color, bg_color = "❌ FAILED", "#d32f2f", "#ffebee"
-        else:
-            total_passed += 1
-            status_icon, border_color, bg_color = "✅ PASSED", "#388e3c", "#e8f5e9"
+    STATUS_STYLE = {
+        "PASSED": {"label": "PASSED", "color": "#1a7f37", "bg": "#e9f7ee", "border": "#1a7f37"},
+        "FAILED": {"label": "FAILED", "color": "#c92a2a", "bg": "#fdecec", "border": "#c92a2a"},
+        "SKIPPED": {"label": "SKIPPED", "color": "#8a6d00", "bg": "#fdf7e3", "border": "#d4a800"},
+    }
+
+    total_passed = sum(1 for d in _compiled_test_results.values() if d["status"] == "PASSED")
+    total_failed = sum(1 for d in _compiled_test_results.values() if d["status"] == "FAILED")
+    total_skipped = sum(1 for d in _compiled_test_results.values() if d["status"] == "SKIPPED")
+    total_tests = len(_compiled_test_results)
+    total_duration = sum(d["duration"] for d in _compiled_test_results.values())
+    pass_rate = (total_passed / total_tests * 100) if total_tests else 0.0
+    all_green = total_failed == 0 and total_skipped == 0
+
+    # Failed first, then skipped, then passed; alphabetical within each group.
+    status_order = {"FAILED": 0, "SKIPPED": 1, "PASSED": 2}
+    sorted_results = sorted(
+        _compiled_test_results.items(),
+        key=lambda kv: (status_order[kv[1]["status"]], kv[1]["name"])
+    )
+
+    def _slug(nodeid):
+        return "test-" + "".join(c if c.isalnum() else "-" for c in nodeid)
+
+    failed_jump_links = "".join(
+        f'<a class="jump-link" href="#{_slug(nodeid)}">{data["name"]}</a>'
+        for nodeid, data in sorted_results if data["status"] == "FAILED"
+    )
+
+    html_cards = []
+    for nodeid, data in sorted_results:
+        style = STATUS_STYLE[data["status"]]
+        anchor_id = _slug(nodeid)
+        is_open = "open" if (data["status"] != "PASSED" or all_green) else ""
 
         error_block = ""
-        if is_failed:
+        if data["status"] == "FAILED":
             error_block = f"""
-            <h4 style="color:#d32f2f; margin: 12px 0 4px 0;">🔴 Traceback Error Message:</h4>
-            <pre style="color:#c62828; background: #fff; padding: 12px; border-radius: 6px; border-left: 5px solid #d32f2f; font-family: monospace; white-space: pre-wrap;">{data['error_msg']}</pre>
+            <h4 class="section-label error">Error Message</h4>
+            <pre class="code-block error-block">{data['error_msg']}</pre>
 
-            <h4 style="color:#d32f2f; margin: 12px 0 4px 0;">🎯 Last Line Executed Before Crash:</h4>
-            <pre style="color:#1a1a1a; background: #fff3cd; padding: 12px; border-radius: 6px; border-left: 5px solid #ffb300; font-family: monospace; font-weight: bold;">{data['failure_line']}</pre>
+            <h4 class="section-label warn">Last Line Executed Before Crash</h4>
+            <pre class="code-block warn-block">{data['failure_line']}</pre>
             """
 
         screenshot_block = ""
         if data["screenshot_b64"]:
             screenshot_block = f"""
-            <h4 style="margin: 12px 0 4px 0;">📸 Screen Capture At Failure:</h4>
-            <img src="data:image/png;base64,{data['screenshot_b64']}" style="max-width:340px; border: 2px solid {border_color}; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.15);">
+            <h4 class="section-label">{data['screenshot_label']} Screenshot</h4>
+            <img class="screenshot lightbox-trigger" style="border-color:{style['border']};" src="data:image/png;base64,{data['screenshot_b64']}">
+            <div class="screenshot-hint">Click to enlarge</div>
             """
+        else:
+            screenshot_block = '<div class="no-screenshot">No screenshot captured for this test.</div>'
 
         card = f"""
-        <div style="border: 1px solid {border_color}; background-color: {bg_color}; margin: 20px 0; padding: 18px; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(0,0,0,0.1); padding-bottom: 8px;">
-                <h2 style="margin: 0; color: {border_color}; font-size: 20px;">{status_icon}: {data['name']}</h2>
-                <span style="font-size: 13px; color: #555; background: rgba(0,0,0,0.05); padding: 4px 8px; border-radius: 12px;">⏳ Duration: {data['duration']:.2f}s</span>
+        <details class="test-card" id="{anchor_id}" data-status="{data['status']}" data-name="{data['name'].lower()}" {is_open}>
+            <summary style="border-left-color:{style['border']};">
+                <span class="status-pill" style="color:{style['color']}; background:{style['bg']};">{style['label']}</span>
+                <span class="platform-pill">{data['platform']}</span>
+                <span class="test-name">{data['name']}</span>
+                <span class="duration-pill">{data['duration']:.2f}s</span>
+            </summary>
+            <div class="test-body">
+                {screenshot_block}
+                {error_block}
+                <h4 class="section-label">Console Output</h4>
+                <pre class="code-block log-block">{data['logs'].strip() or "No print statements caught in this execution."}</pre>
             </div>
-
-            <h4 style="margin: 12px 0 4px 0; color: #333;">📝 All Aggregated Console Output (Prints):</h4>
-            <pre style="background: #23241f; color: #f8f8f2; padding: 14px; border-radius: 6px; overflow-x: auto; font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4;">{data['logs'].strip() or "No print statements caught in this execution."}</pre>
-
-            {error_block}
-            {screenshot_block}
-        </div>
+        </details>
         """
         html_cards.append(card)
 
-    # Compile the final document layout
+    meta_line = f"Branch <code>{git_branch}</code> @ <code>{git_commit}</code>" if git_branch else ""
+
     html_layout = f"""
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="utf-8">
-        <title>Automation Execution Report</title>
-    </head>
-    <body style="font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; background-color: #f4f6f9; padding: 30px; margin: 0;">
-        <div style="background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); max-width: 1050px; margin: 0 auto;">
-            <h1 style="color: #2c3e50; border-bottom: 3px solid #ecf0f1; padding-bottom: 12px; margin-top: 0;">🧪 Automation Run Summary</h1>
+        <title>Automation Execution Report — {timestamp}</title>
+        <style>
+            :root {{
+                --bg: #f4f6f9;
+                --card-bg: #ffffff;
+                --text: #1c2530;
+                --text-muted: #5b6b7c;
+                --border: #e3e8ee;
+                --accent: #2c3e50;
+            }}
+            * {{ box-sizing: border-box; }}
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+                background: var(--bg);
+                color: var(--text);
+                margin: 0;
+                padding: 32px 16px;
+            }}
+            .container {{
+                max-width: 1100px;
+                margin: 0 auto;
+                background: var(--card-bg);
+                border-radius: 12px;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+                padding: 28px 32px;
+            }}
+            h1 {{
+                font-size: 20px;
+                margin: 0 0 4px 0;
+                color: var(--accent);
+            }}
+            .run-meta {{
+                font-size: 13px;
+                color: var(--text-muted);
+                margin-bottom: 20px;
+            }}
+            .stat-bar {{
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+                margin-bottom: 20px;
+            }}
+            .stat {{
+                flex: 1;
+                min-width: 110px;
+                background: #f8f9fb;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 10px 14px;
+            }}
+            .stat .value {{ font-size: 20px; font-weight: 600; }}
+            .stat .label {{ font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }}
+            .stat.pass .value {{ color: #1a7f37; }}
+            .stat.fail .value {{ color: #c92a2a; }}
+            .stat.skip .value {{ color: #8a6d00; }}
 
-            <div style="display: flex; gap: 40px; background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 10px; font-size: 15px;">
-                <div><strong>📅 Run Date:</strong> {timestamp}</div>
-                <div><strong>📊 Total Tests Executed:</strong> {len(_compiled_test_results)}</div>
-                <div style="color: #388e3c;"><strong>🟢 Passed:</strong> {total_passed}</div>
-                <div style="color: #d32f2f;"><strong>🔴 Failed:</strong> {total_failed}</div>
+            .toolbar {{
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin: 4px 0 18px 0;
+                flex-wrap: wrap;
+            }}
+            .filter-btn {{
+                border: 1px solid var(--border);
+                background: #fff;
+                color: var(--text);
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 13px;
+                cursor: pointer;
+            }}
+            .filter-btn.active {{
+                background: var(--accent);
+                color: #fff;
+                border-color: var(--accent);
+            }}
+            .search-input {{
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 6px 10px;
+                font-size: 13px;
+                flex: 1;
+                min-width: 160px;
+                max-width: 280px;
+            }}
+
+            .jump-panel {{
+                background: #fdecec;
+                border: 1px solid #f3c9c9;
+                border-radius: 8px;
+                padding: 10px 14px;
+                margin-bottom: 18px;
+                font-size: 13px;
+            }}
+            .jump-panel .jump-title {{ font-weight: 600; color: #c92a2a; margin-bottom: 6px; }}
+            .jump-link {{
+                display: inline-block;
+                color: #c92a2a;
+                text-decoration: none;
+                background: #fff;
+                border: 1px solid #f3c9c9;
+                border-radius: 5px;
+                padding: 3px 8px;
+                margin: 2px 4px 2px 0;
+                font-size: 12px;
+            }}
+            .jump-link:hover {{ text-decoration: underline; }}
+
+            .test-card {{
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                margin-bottom: 10px;
+                overflow: hidden;
+            }}
+            .test-card > summary {{
+                list-style: none;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 12px 14px;
+                border-left: 4px solid;
+                background: #fafbfc;
+            }}
+            .test-card > summary::-webkit-details-marker {{ display: none; }}
+            .status-pill {{
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 0.03em;
+                padding: 3px 8px;
+                border-radius: 10px;
+            }}
+            .platform-pill {{
+                font-size: 11px;
+                color: var(--text-muted);
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 2px 8px;
+            }}
+            .test-name {{ font-size: 14px; font-weight: 600; flex: 1; }}
+            .duration-pill {{ font-size: 12px; color: var(--text-muted); }}
+
+            .test-body {{ padding: 16px 18px; }}
+            .section-label {{ font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin: 14px 0 6px 0; }}
+            .section-label.error {{ color: #c92a2a; }}
+            .section-label.warn {{ color: #8a6d00; }}
+            .code-block {{
+                font-family: "SF Mono", "Courier New", monospace;
+                font-size: 12.5px;
+                line-height: 1.5;
+                padding: 12px 14px;
+                border-radius: 6px;
+                overflow-x: auto;
+                white-space: pre-wrap;
+                word-break: break-word;
+                margin: 0;
+            }}
+            .log-block {{ background: #1e2228; color: #e6e6e6; }}
+            .error-block {{ background: #fdecec; color: #8a1f1f; border-left: 3px solid #c92a2a; }}
+            .warn-block {{ background: #fdf7e3; color: #5c4600; border-left: 3px solid #d4a800; font-weight: 600; }}
+
+            .screenshot {{
+                max-width: 320px;
+                border: 2px solid;
+                border-radius: 6px;
+                display: block;
+                cursor: zoom-in;
+            }}
+            .screenshot-hint {{ font-size: 11px; color: var(--text-muted); margin-top: 4px; }}
+            .no-screenshot {{ font-size: 12px; color: var(--text-muted); font-style: italic; }}
+
+            .test-card[data-status="PASSED"] > summary {{ border-left-color: #1a7f37; }}
+            .test-card[data-status="FAILED"] > summary {{ border-left-color: #c92a2a; }}
+            .test-card[data-status="SKIPPED"] > summary {{ border-left-color: #d4a800; }}
+
+            .test-card.is-hidden {{ display: none; }}
+
+            .lightbox-overlay {{
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(10, 14, 20, 0.88);
+                z-index: 1000;
+                align-items: center;
+                justify-content: center;
+                padding: 40px;
+                cursor: zoom-out;
+            }}
+            .lightbox-overlay.is-visible {{ display: flex; }}
+            .lightbox-overlay img {{
+                max-width: 100%;
+                max-height: 100%;
+                border-radius: 6px;
+                box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+            }}
+            .lightbox-close {{
+                position: fixed;
+                top: 20px;
+                right: 28px;
+                color: #fff;
+                font-size: 28px;
+                line-height: 1;
+                cursor: pointer;
+                opacity: 0.85;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Automation Run Summary</h1>
+            <div class="run-meta">{timestamp}{" &middot; " + meta_line if meta_line else ""}</div>
+
+            <div class="stat-bar">
+                <div class="stat"><div class="value">{total_tests}</div><div class="label">Total</div></div>
+                <div class="stat pass"><div class="value">{total_passed}</div><div class="label">Passed</div></div>
+                <div class="stat fail"><div class="value">{total_failed}</div><div class="label">Failed</div></div>
+                <div class="stat skip"><div class="value">{total_skipped}</div><div class="label">Skipped</div></div>
+                <div class="stat"><div class="value">{pass_rate:.0f}%</div><div class="label">Pass Rate</div></div>
+                <div class="stat"><div class="value">{total_duration:.1f}s</div><div class="label">Duration</div></div>
+            </div>
+
+            {f'<div class="jump-panel"><div class="jump-title">Failed Tests</div>{failed_jump_links}</div>' if total_failed else ''}
+
+            <div class="toolbar">
+                <button class="filter-btn active" data-filter="ALL">All</button>
+                <button class="filter-btn" data-filter="FAILED">Failed</button>
+                <button class="filter-btn" data-filter="PASSED">Passed</button>
+                <button class="filter-btn" data-filter="SKIPPED">Skipped</button>
+                <input class="search-input" type="text" placeholder="Filter by test name...">
             </div>
 
             {''.join(html_cards)}
         </div>
+
+        <div class="lightbox-overlay" id="lightbox">
+            <span class="lightbox-close">&times;</span>
+            <img id="lightbox-img" src="" alt="Full resolution screenshot">
+        </div>
+
+        <script>
+            (function() {{
+                var cards = Array.prototype.slice.call(document.querySelectorAll('.test-card'));
+                var buttons = Array.prototype.slice.call(document.querySelectorAll('.filter-btn'));
+                var search = document.querySelector('.search-input');
+                var activeFilter = 'ALL';
+
+                function applyFilters() {{
+                    var term = search.value.trim().toLowerCase();
+                    cards.forEach(function(card) {{
+                        var matchesStatus = activeFilter === 'ALL' || card.dataset.status === activeFilter;
+                        var matchesSearch = !term || card.dataset.name.indexOf(term) !== -1;
+                        card.classList.toggle('is-hidden', !(matchesStatus && matchesSearch));
+                    }});
+                }}
+
+                buttons.forEach(function(btn) {{
+                    btn.addEventListener('click', function() {{
+                        buttons.forEach(function(b) {{ b.classList.remove('active'); }});
+                        btn.classList.add('active');
+                        activeFilter = btn.dataset.filter;
+                        applyFilters();
+                    }});
+                }});
+
+                search.addEventListener('input', applyFilters);
+
+                // Lightbox: click a screenshot thumbnail to view it full-size in-page.
+                // (A data: URI cannot be opened via target="_blank" -- browsers block
+                // top-level navigation to data: URLs, so this stays in-page instead.)
+                var lightbox = document.getElementById('lightbox');
+                var lightboxImg = document.getElementById('lightbox-img');
+
+                document.querySelectorAll('.lightbox-trigger').forEach(function(img) {{
+                    img.addEventListener('click', function(e) {{
+                        e.preventDefault();
+                        e.stopPropagation();
+                        lightboxImg.src = img.src;
+                        lightbox.classList.add('is-visible');
+                    }});
+                }});
+
+                lightbox.addEventListener('click', function() {{
+                    lightbox.classList.remove('is-visible');
+                    lightboxImg.src = '';
+                }});
+
+                document.addEventListener('keydown', function(e) {{
+                    if (e.key === 'Escape') {{
+                        lightbox.classList.remove('is-visible');
+                        lightboxImg.src = '';
+                    }}
+                }});
+            }})();
+        </script>
     </body>
     </html>
     """
@@ -409,7 +931,9 @@ def pytest_sessionfinish(session, exitstatus):
     with open(report_path, "w", encoding="utf-8") as f:
         f.write(html_layout)
 
-    print(f"\n📊 Refined Dashboard Summary Generated At: {report_path}")
+    _prune_old_reports(reports_dir, REPORT_RETENTION_COUNT)
+
+    print(f"\nDashboard Summary Generated At: {report_path}")
 
 
 @pytest.fixture(scope="session")
