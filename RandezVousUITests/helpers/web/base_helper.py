@@ -20,6 +20,17 @@ class BaseHelper:
         except TimeoutException:
             return False
 
+    def switch_to_webview(self, timeout=10):
+        """Appium/XCUITest sessions (safari_driver, rv_driver*) start in the NATIVE_APP
+        context -- page content only becomes findable after switching into the WEBVIEW
+        context Safari/the app creates once the page loads. Selenium-only drivers
+        (desktop_safari_driver, mobile_chrome_driver) have no .contexts and must never
+        call this."""
+        wait = WebDriverWait(self.driver, timeout)
+        wait.until(lambda d: any(c != "NATIVE_APP" for c in d.contexts))
+        webview = next(c for c in self.driver.contexts if c != "NATIVE_APP")
+        self.driver.switch_to.context(webview)
+
     def _wait_for_stable_position(self, element, timeout=1.0, poll=0.05):
         """Waits until the element's rect stops changing -- guards against
         clicking mid-CSS-transition (e.g. an accordion still opening),
