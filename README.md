@@ -1,9 +1,10 @@
 # RandezVous UI Testing
 
-Automated UI test suite for RandezVous, built with [pytest](https://pytest.org). Covers two platforms:
+Automated UI test suite for RandezVous, built with [pytest](https://pytest.org). Covers:
 
 - **iOS** — [Appium](https://appium.io) + XCUITest, driving the RandezVous app on a local iOS Simulator.
 - **Web** — [Selenium](https://www.selenium.dev), driving a local checkout of the `rvsite` web app in Safari, Chrome, or Firefox.
+- **Android** — [Appium](https://appium.io) + UiAutomator2, driving `rvsite` in real mobile Chrome on a local Android emulator/device (`android_chrome_driver`). RV's Trusted Web Activity app is already live on Google Play; this setup could later drive it directly instead of just the web flow it launches from.
 
 ---
 
@@ -34,6 +35,13 @@ Automated UI test suite for RandezVous, built with [pytest](https://pytest.org).
 - Node.js (for running the `rvsite` dev servers)
 - A local checkout of `rvsite` anywhere on disk. Set its path via `WEB_APP_PATH` in `.env` (defaults to `../../RandezVousSite/rvsite`, relative to wherever `pytest` is run from — see `.env.example`).
 - Safari (built in), and/or Chrome and/or Firefox if you want to run tests against them.
+
+**Android tests**
+- Android Studio, with the Appium UiAutomator2 driver installed (`appium driver install uiautomator2`)
+- An AVD (Android Studio → Device Manager) built from a system image with Google Play/Google APIs, so it ships with a real Chrome — plain AOSP images don't
+- Android SDK platform-tools (`adb`) on `PATH` — Android Studio installs these but doesn't always add them to `PATH`
+- The Appium server needs `ANDROID_HOME`/`ANDROID_SDK_ROOT` set too (not just `adb` on `PATH`) — `conftest.py`'s `appium_server` fixture defaults it to `~/Library/Android/sdk` if unset and that path exists; export it yourself if your SDK lives elsewhere
+- The AVD booted before running tests (Device Manager, or `emulator -avd <name>` from the command line)
 
 ---
 
@@ -76,6 +84,12 @@ Web tests drive a **real local `rvsite` dev server** — they don't hit any depl
 - Clone `rvsite` anywhere and run `npm install` there, then point `WEB_APP_PATH` (in this repo's `.env`) at it.
 - `rvsite` needs its own `.env` configured (Firebase client config, App Check debug token, etc.) — see `rvsite`'s own `.env.example`.
 - `npm start` in `rvsite` now points at its QA target (port 5174) — the test harness instead runs `npm run start:prod`, which — despite the name — is the plain local-dev setup (regular `.env`, port 5173) these tests are built around. You don't need to run anything manually; `conftest.py` starts and stops both servers automatically per test session.
+
+### 5. Android setup
+
+- Create and boot an AVD as described in [Prerequisites](#prerequisites), then set `ANDROID_DEVICE_NAME` / `ANDROID_PLATFORM_VERSION` in `.env` to match it.
+- Nothing else to configure: `android_chrome_driver` auto-detects the booted emulator via `adb devices`, and forwards its loopback ports to the host's dev servers (`adb reverse`) so it reaches `http://localhost:5173` the same way every other web driver does. Set `ANDROID_UDID` in `.env` only if more than one emulator/device is attached at once.
+- Headless Android isn't wired up the way `--headless` works for iOS/Chrome/Firefox — a headless AVD has to be launched with `emulator -no-window` at the emulator level, before Appium ever connects.
 
 ---
 
@@ -193,6 +207,8 @@ One test function per file, named `test_<what_it_tests>`. Take a driver fixture 
 | `rv_driver_no_reset` | iOS | App must preserve state from a previous session |
 | `safari_driver` | iOS | Test starts in mobile Safari (URL deep-link flows) |
 | `desktop_safari_driver` | Web | Any web test — despite the name, respects `--browser`/`--headless` |
+| `mobile_chrome_driver` | Web | Desktop Chrome spoofing an Android user-agent — cheap phone-layout checks, not real intent-link behavior |
+| `android_chrome_driver` | Android | Test needs real mobile Chrome / Android's actual intent-link resolution (e.g. deep-link flows) |
 
 ### 3. Add helpers for new screens
 
@@ -239,3 +255,4 @@ A few non-obvious things learned the hard way, in case something breaks mysterio
 - **Login intermittently fails with `auth/network-request-failed`.** Documented but unresolved — happens rarely, cause not fully pinned down. Not fixed by retrying inside `HomepageHelper.login()`; a `retry_web_login` autouse fixture in `conftest.py` retries the whole login step for any web test if this happens.
 - **Safari has no headless mode and no `driver.get_log()`.** Both are Apple platform limitations, not something misconfigured. Use `--browser=chrome` or `--browser=firefox` if you need either.
 - **`rvsite`'s dev server behaves oddly after many restarts in one session.** If tests that used to pass start failing at the same early step (e.g. the homepage's "Find Quest" button never becoming clickable) with no code change, try clearing Vite's cache: `rm -rf <rvsite>/node_modules/.vite`.
+- **An Android emulator's `localhost` is itself, not your Mac.** `android_chrome_driver` still navigates to `http://localhost:5173`/`:3000` like every other web driver — it works around Android's loopback by running `adb reverse` on setup instead of teaching test code a separate `10.0.2.2`-style URL. Drive the emulator manually outside this fixture and you'll need to do the same.

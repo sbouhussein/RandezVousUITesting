@@ -7,11 +7,13 @@ os.environ["GRPC_POLL_STRATEGY"] = "poll"
 os.environ["GRPC_VERBOSITY"] = "ERROR"
 import subprocess
 
+from helpers.common.device_helper_base import DeviceHelperBase
+
 RV_BUNDLE_ID = os.getenv("RV_BUNDLE_ID", "sbouhussein.github.io-rvsite.RandezVous")
 
-class DeviceHelper:
-    def __init__(self, driver):
-        self.driver = driver
+
+class DeviceHelper(DeviceHelperBase):
+    default_app_id = RV_BUNDLE_ID
 
     def fast_reset_to_signed_out(self, bundle_id=RV_BUNDLE_ID):
         # Firebase's session lives in the Keychain, so clearing app data alone won't sign the user out.
