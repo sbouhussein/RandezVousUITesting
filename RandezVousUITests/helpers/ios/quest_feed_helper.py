@@ -10,7 +10,7 @@ class QuestFeedHelper:
 
         # Header & Navigation
         self.back_button = (AppiumBy.IOS_PREDICATE, "label == 'Back'")
-        self.megaphone_button = (AppiumBy.ACCESSIBILITY_ID, "megaphone.fill")
+        self.notification_menu_button = (AppiumBy.ACCESSIBILITY_ID, "Notification settings")
         self.filter_button = (AppiumBy.ACCESSIBILITY_ID, "All Posts")
 
         # Feed Interaction

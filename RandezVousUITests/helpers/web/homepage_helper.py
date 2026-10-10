@@ -93,3 +93,8 @@ class HomepageHelper:
         self.enter_password(password)
         self.click_sign_in()
 
+    def wait_until_signed_in(self):
+        """Waits for LoginPage's post-signin redirect (navigate(redirectTo),
+        see src/components/LoginPage.jsx) to fire."""
+        self.wait.until(lambda d: "/login" not in d.current_url)
+
