@@ -24,7 +24,9 @@ def test_onboarding_ios_safari_deep_link_opens_app_when_installed(safari_driver)
     onboarding.switch_to_webview()
     onboarding.click_open_in_app()
 
-    state = device.wait_for_app_foreground()
+    # Cold-launching the app behind SpringBoard's "Open in RandezVous?" prompt can take well over the
+    # helper's 10s default on a loaded simulator.
+    state = device.wait_for_app_foreground(timeout=40)
     assert state == 4, (
         f"Expected the deep link to hand off to the installed RV app (query_app_state == 4), got: {state}"
     )

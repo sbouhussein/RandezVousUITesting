@@ -24,7 +24,7 @@ class DeviceHelper(DeviceHelperBase):
         self.driver.activate_app(bundle_id)
         print("App relaunched in pre-auth state.")
 
-    def set_simulator_location(self, lat=41.282778, lon=-157.829444):
+    def set_simulator_location(self, lat=37.6255291, lon=-77.5144256):
         print("Forcing location via Appium Driver...")
         try:
             udid = self.driver.capabilities.get('udid')

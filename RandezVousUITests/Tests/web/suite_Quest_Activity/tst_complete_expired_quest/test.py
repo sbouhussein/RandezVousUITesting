@@ -8,14 +8,14 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from helpers.web.homepage_helper import HomepageHelper
 from helpers.web.quest_helper import QuestHelper
+from helpers.web.quest_test_data import BACKEND_URL, BASE_URL, EXPIRED_QUEST_ID, ORG_ID
 
-ORG_ID = "test-3hmYPwC0cFa6zch5syk7"
-QUEST_ID = "ExpiredTestQuest"
+QUEST_ID = EXPIRED_QUEST_ID
 EXPIRED_END_TIME = "2026-09-06T14:05:00Z"
 FUTURE_END_TIME = "2031-02-28T21:14:00Z"
 
-TIMING_URL = f"http://localhost:3000/api/local-admin/quest/{ORG_ID}/{QUEST_ID}/timing"
-PROFILE_URL = "http://localhost:3000/api/user/profile"
+TIMING_URL = f"{BACKEND_URL}/api/local-admin/quest/{ORG_ID}/{QUEST_ID}/timing"
+PROFILE_URL = f"{BACKEND_URL}/api/user/profile"
 
 
 def _set_quest_end_time(end_time):
@@ -42,17 +42,25 @@ def test_complete_expired_quest(desktop_safari_driver):
     """Expiration blocks new participation, not a returning user finishing
     what they already joined (see QuestDetail.jsx's isQuestActive and
     activities.js's checkQuestActive(..., { allowEnded: true })). Leaves
-    ExpiredTestQuest expired afterward either way."""
+    The quest expired afterward either way."""
     email = "oalson123@gmail.com"
     password = "OmarTest123"
 
     nav = HomepageHelper(desktop_safari_driver)
     quest = QuestHelper(desktop_safari_driver)
 
+    # The dev-only timing route was added to rvsite for this test, then reverted (rvsite commits
+    # 38dbd88 -> 7fc88c1 -> ca272c7 -> 82b4cf2), and activity completion rejects ended quests
+    # without it. Skip -- not fail -- while it's absent; this runs again once the route is back.
+    probe = requests.post(TIMING_URL, json={"endTime": EXPIRED_END_TIME}, timeout=10)
+    if probe.status_code == 404:
+        pytest.skip("rvsite has no dev-only quest timing endpoint (POST /api/local-admin/quest/<org>/<qid>/timing); "
+                    "this test can't flip the quest's end time without it.")
+
     _set_quest_end_time(FUTURE_END_TIME)
     try:
         print("--- Phase 1: active -- join only ---")
-        desktop_safari_driver.get("http://localhost:5173")
+        desktop_safari_driver.get(BASE_URL)
         nav.login(email, password)
         nav.find_quest(QUEST_ID)
         WebDriverWait(desktop_safari_driver, 30).until(
@@ -62,7 +70,7 @@ def test_complete_expired_quest(desktop_safari_driver):
 
         print("--- Phase 2: ended -- re-enter and finish both activities ---")
         _set_quest_end_time(EXPIRED_END_TIME)
-        desktop_safari_driver.get("http://localhost:5173")
+        desktop_safari_driver.get(BASE_URL)
         nav.find_quest(QUEST_ID)
         WebDriverWait(desktop_safari_driver, 30).until(
             EC.visibility_of_element_located(quest.honor_activity_locator)

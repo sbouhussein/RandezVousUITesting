@@ -4,6 +4,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from helpers.web.homepage_helper import HomepageHelper
 from helpers.web.quest_helper import QuestHelper
+from helpers.web.quest_test_data import ACTIVITY_QUEST_ID
 
 
 @pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
@@ -11,7 +12,7 @@ def test_complete_prompt_activity(desktop_safari_driver):
 
     email = "oalson123@gmail.com"
     password = "OmarTest123"
-    quest_code = "TestAutomationActivityQuest"
+    quest_code = ACTIVITY_QUEST_ID
     response = "Trivia"
 
     wait = WebDriverWait(desktop_safari_driver, 10)

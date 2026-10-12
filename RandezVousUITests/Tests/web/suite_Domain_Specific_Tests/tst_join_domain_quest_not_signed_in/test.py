@@ -5,15 +5,16 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from helpers.web.homepage_helper import HomepageHelper
 from helpers.web.quest_helper import QuestHelper
+from helpers.web.quest_test_data import BASE_URL, RESTRICTED_QUEST_ID
 
 
 def tst_join_domain_quest_not_signed_in(desktop_safari_driver):
     print("\n--- Starting test: tst_join_domain_quest_not_signed_in ---")
 
-    print("Navigating to http://localhost:5173")
-    desktop_safari_driver.get("http://localhost:5173")
+    print(f"Navigating to {BASE_URL}")
+    desktop_safari_driver.get(BASE_URL)
 
-    domain_protected_quest_code = "DomainProtectedQuest"
+    domain_protected_quest_code = RESTRICTED_QUEST_ID
 
     nav = HomepageHelper(desktop_safari_driver)
     quest = QuestHelper(desktop_safari_driver)

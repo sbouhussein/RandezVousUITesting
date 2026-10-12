@@ -7,8 +7,8 @@ from helpers.ios.login_page_helper import LoginPageHelper
 def test_prompt_based_activity(rv_driver):
     email = "oalson123@gmail.com"
     password = "OmarTest123"
-    quest = "TestAutomationActivityQuest"
-    activity = "Prompt Activity"
+    quest = "test-automation-quest"
+    activity = "Prompt"
     response = "Prompt"
 
     custom_quest = CustomQuestPage(rv_driver)

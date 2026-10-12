@@ -37,7 +37,7 @@ Automated UI test suite for RandezVous, built with [pytest](https://pytest.org).
 - Safari (built in), and/or Chrome and/or Firefox if you want to run tests against them.
 
 **Android tests**
-- Android Studio, with the Appium UiAutomator2 driver installed (`appium driver install uiautomator2`)
+- The Appium UiAutomator2 driver (`appium driver install uiautomator2`). The Android SDK, `adb`, a Google Play system image and the AVD are installed for you by `./setup.sh` (via `scripts/setup_android.sh`, several GB; `SKIP_ANDROID=1 ./setup.sh` skips it). Android Studio is optional.
 - An AVD (Android Studio → Device Manager) built from a system image with Google Play/Google APIs, so it ships with a real Chrome — plain AOSP images don't
 - Android SDK platform-tools (`adb`) on `PATH` — Android Studio installs these but doesn't always add them to `PATH`
 - The Appium server needs `ANDROID_HOME`/`ANDROID_SDK_ROOT` set too (not just `adb` on `PATH`) — `conftest.py`'s `appium_server` fixture defaults it to `~/Library/Android/sdk` if unset and that path exists; export it yourself if your SDK lives elsewhere
@@ -64,15 +64,17 @@ appium plugin install inspector
 
 ### 2. Firebase service account key
 
-Not committed — obtain it from the Firebase console:
+Not committed — obtain it from the **`randezvous-qa`** Firebase project (this suite never uses prod):
 
-> Firebase Console → Project Settings → Service Accounts → Generate new private key
+> Firebase Console → `randezvous-qa` → Project Settings → Service Accounts → Generate new private key
 
-Save the downloaded JSON to `private/service-account-key.json` (gitignored; the `private/` directory isn't committed either).
+Save the downloaded JSON to `private/service-account-key-qa.json` (gitignored; the `private/` directory isn't committed either). `conftest.py`'s `firebase_init` hard-fails at session start if it's missing.
 
 ### 3. iOS setup
 
-- Open Xcode with the RandezVous repo and press ▶ to build and launch the simulator.
+- Build the app from the main RandezVous iOS repo (`RandevousMain`) with the **"RandezVous QA"** scheme (it embeds `GoogleService-Info-QA.plist`, so the app talks to `randezvous-qa`), then launch it on the simulator.
+- Register your `FIREBASE_APP_CHECK_DEBUG_TOKEN` in Firebase Console → `randezvous-qa` → App Check → Manage debug tokens, or `joinQuest` returns "unauthenticated".
+- iOS tests use the QA quest `test-automation-quest`.
 - In `conftest.py`, set `DEVICE_NAME`, `PLATFORM_VERSION`, and the simulator's `UDID`:
   Xcode → Window → Devices and Simulators (⇧⌘2) → Simulators tab → select your simulator → copy its **Identifier**.
 - (Optional) PyCharm: [download](https://www.jetbrains.com/pycharm/download/?section=mac), then File → Open → this repo. Right-click a `test.py` → **Run 'Python tests in test'**.
@@ -83,12 +85,13 @@ Web tests drive a **real local `rvsite` dev server** — they don't hit any depl
 
 - Clone `rvsite` anywhere and run `npm install` there, then point `WEB_APP_PATH` (in this repo's `.env`) at it.
 - `rvsite` needs its own `.env` configured (Firebase client config, App Check debug token, etc.) — see `rvsite`'s own `.env.example`.
-- `npm start` in `rvsite` now points at its QA target (port 5174) — the test harness instead runs `npm run start:prod`, which — despite the name — is the plain local-dev setup (regular `.env`, port 5173) these tests are built around. You don't need to run anything manually; `conftest.py` starts and stops both servers automatically per test session.
+- The harness runs `npm start` in `rvsite` — its **QA target** (Vite `--mode qa` on port 5174 + backend on 3000, using rvsite's `.env.qa` and `backend/.env.qa`, which must be filled in). Never `start:prod`. You don't need to run anything manually; `conftest.py` starts and stops both servers automatically per test session.
+- Seed the QA fixtures once: `python scripts/firebase/seed_qa_web_fixtures.py` (see [Web fixtures live in randezvous-qa](#web-fixtures-live-in-randezvous-qa)).
 
 ### 5. Android setup
 
 - Create and boot an AVD as described in [Prerequisites](#prerequisites), then set `ANDROID_DEVICE_NAME` / `ANDROID_PLATFORM_VERSION` in `.env` to match it.
-- Nothing else to configure: `android_chrome_driver` auto-detects the booted emulator via `adb devices`, and forwards its loopback ports to the host's dev servers (`adb reverse`) so it reaches `http://localhost:5173` the same way every other web driver does. Set `ANDROID_UDID` in `.env` only if more than one emulator/device is attached at once.
+- Nothing else to configure: `android_chrome_driver` auto-detects the booted emulator via `adb devices`, and forwards its loopback ports to the host's dev servers (`adb reverse`) so it reaches `http://localhost:5174` the same way every other web driver does. Set `ANDROID_UDID` in `.env` only if more than one emulator/device is attached at once.
 - Headless Android isn't wired up the way `--headless` works for iOS/Chrome/Firefox — a headless AVD has to be launched with `emulator -no-window` at the emulator level, before Appium ever connects.
 
 ---
@@ -155,7 +158,7 @@ Combine as needed, e.g. `pytest -s -v --maxfail=1 RandezVousUITests/Tests/web`.
 RandezVousUITesting/
 ├── .env.example                       # Required env vars for iOS tests (copy → .env)
 ├── private/                           # Gitignored — never committed
-│   └── service-account-key.json       # Firebase Admin SDK key
+│   └── service-account-key-qa.json    # Firebase Admin SDK key (randezvous-qa)
 ├── scripts/                           # Standalone Firebase admin / data-reset scripts
 │
 └── RandezVousUITests/                 # UI test suite root (run pytest from repo root)
@@ -255,4 +258,10 @@ A few non-obvious things learned the hard way, in case something breaks mysterio
 - **Login intermittently fails with `auth/network-request-failed`.** Documented but unresolved — happens rarely, cause not fully pinned down. Not fixed by retrying inside `HomepageHelper.login()`; a `retry_web_login` autouse fixture in `conftest.py` retries the whole login step for any web test if this happens.
 - **Safari has no headless mode and no `driver.get_log()`.** Both are Apple platform limitations, not something misconfigured. Use `--browser=chrome` or `--browser=firefox` if you need either.
 - **`rvsite`'s dev server behaves oddly after many restarts in one session.** If tests that used to pass start failing at the same early step (e.g. the homepage's "Find Quest" button never becoming clickable) with no code change, try clearing Vite's cache: `rm -rf <rvsite>/node_modules/.vite`.
-- **An Android emulator's `localhost` is itself, not your Mac.** `android_chrome_driver` still navigates to `http://localhost:5173`/`:3000` like every other web driver — it works around Android's loopback by running `adb reverse` on setup instead of teaching test code a separate `10.0.2.2`-style URL. Drive the emulator manually outside this fixture and you'll need to do the same.
+- **An Android emulator's `localhost` is itself, not your Mac.** `android_chrome_driver` still navigates to `http://localhost:5174`/`:3000` like every other web driver — it works around Android's loopback by running `adb reverse` on setup instead of teaching test code a separate `10.0.2.2`-style URL. Drive the emulator manually outside this fixture and you'll need to do the same.
+
+### Web fixtures live in randezvous-qa
+
+Everything runs against `randezvous-qa`: the iOS app (QA scheme), the web servers (`npm start` → Vite `--mode qa` on 5174 + backend on 3000) and every Firebase Admin call. Web fixtures (quests under org `test-org`, the test accounts and their usernames) are defined once in `RandezVousUITests/helpers/web/quest_test_data.py` and created by `python scripts/firebase/seed_qa_web_fixtures.py` — re-run it after editing that file or whenever QA data is reset. A test account needs a `username` or rvsite parks it on "Create Your Username" and it never leaves `/login`.
+
+Web-suite caveats: `tst_complete_expired_quest` skips itself while rvsite `main` lacks the dev-only quest `timing` endpoint; `tst_join_domain_quest_not_signed_in` is an unfinished stub (not collected); the domain-restricted happy path signs in as a fabricated Google-provider QA user (`google_domain_user@randezvous.com`, created by the seed script, signed in by custom token — see `helpers/web/google_identity_helper.py`), and a second one on the wrong domain (`google_wrong_domain_user@gmail.com`) covers the refusal path; and the iOS Safari "fallback" and "deep link" tests are mutually exclusive (one needs the RV app uninstalled), so one always skips.

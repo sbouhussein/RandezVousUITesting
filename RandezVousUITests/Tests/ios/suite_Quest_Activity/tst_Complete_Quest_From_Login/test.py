@@ -8,7 +8,7 @@ from helpers.ios.device_helper import DeviceHelper
 def test_complete_quest_from_login(rv_driver):
     email = "oalson123@gmail.com"
     password = "OmarTest123"
-    quest = "TestAutomationActivityQuest"
+    quest = "test-automation-quest"
 
     custom_quest = CustomQuestPage(rv_driver)
     quest_helper = QuestHelper(rv_driver)
@@ -20,4 +20,4 @@ def test_complete_quest_from_login(rv_driver):
     custom_quest.join_custom_quest(quest)
     device_helper.set_simulator_location()
     custom_quest.complete_all_activities()
-
+    #to check the leaderboard try and click anywhere behind the achievment

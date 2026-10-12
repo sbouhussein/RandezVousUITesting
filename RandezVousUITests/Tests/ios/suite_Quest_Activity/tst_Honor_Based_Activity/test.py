@@ -7,8 +7,8 @@ from helpers.ios.login_page_helper import LoginPageHelper
 def test_honor_based_activity(rv_driver):
     email = "oalson123@gmail.com"
     password = "OmarTest123"
-    quest = "TestAutomationActivityQuest"
-    activity = "Honor Code Activity"
+    quest = "test-automation-quest"
+    activity = "Honor"
 
     custom_quest = CustomQuestPage(rv_driver)
     login_helper = LoginPageHelper(rv_driver)

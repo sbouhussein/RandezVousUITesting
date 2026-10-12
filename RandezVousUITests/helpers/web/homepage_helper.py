@@ -5,6 +5,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from helpers.web.quest_helper import QuestHelper
+from helpers.web.quest_test_data import BASE_URL
 
 class HomepageHelper:
     def __init__(self, driver):
@@ -21,6 +22,7 @@ class HomepageHelper:
         self.email_input_button = (By.XPATH, "//input[@id='auth-email']")
         self.password_input_button = (By.XPATH, "//input[@id='auth-password']")
         self.sign_in_button = (By.XPATH, "//button[@type='submit' and normalize-space()='Sign In']")
+        self.auth_network_error = (By.XPATH, "//*[contains(normalize-space(), 'auth/network-request-failed')]")
         self.guest_button = (By.XPATH, "//button[contains(normalize-space(), 'Continue as Guest')]")
         self.sign_in_save= (By.XPATH, "//a[normalize-space()='Sign In to Save Progress']")
 
@@ -38,7 +40,7 @@ class HomepageHelper:
 
     def click_login_button(self):
         print("Clicking login button")
-        self.driver.get("http://localhost:5173/login")
+        self.driver.get(f"{BASE_URL}/login")
         self._wait_for_login_form()
 
     def _wait_for_login_form(self):
@@ -66,9 +68,50 @@ class HomepageHelper:
         self.wait.until(EC.element_to_be_clickable(self.sign_in_save)).click()
 
     def login_from_url(self, email, password):
-        self.enter_email(email)
-        self.enter_password(password)
-        self.click_sign_in()
+        # Same hydrate/route-spinner wait login() does -- typing into the form before RR7 finishes
+        # mounting LoginPage intermittently lost the input or the Sign In click.
+        self._wait_for_login_form()
+        self._submit_credentials(email, password)
+
+    def _submit_credentials(self, email, password, attempts=3, settle_timeout=15):
+        """Fills in and submits the sign-in form, riding out Firebase's intermittent sign-in stall.
+        Sometimes the Auth request hangs -- the page stays on /login with the form filled and no
+        error, until Firebase eventually reports `auth/network-request-failed` -- and the SDK
+        stays broken until the page reloads, so clicking Sign In again isn't enough. If the page
+        hasn't left /login after `settle_timeout` (or shows that error), reload the login page
+        (keeping its ?goto), re-enter the credentials and resubmit. Returns once the page leaves
+        /login, or after the final attempt (callers decide what a stuck sign-in means, e.g. a
+        missing username)."""
+        for attempt in range(1, attempts + 1):
+            self.enter_email(email)
+            self.enter_password(password)
+            self.click_sign_in()
+            try:
+                WebDriverWait(self.driver, settle_timeout).until(
+                    lambda d: "/login" not in d.current_url or d.find_elements(*self.auth_network_error))
+            except TimeoutException:
+                pass
+            if "/login" not in self.driver.current_url:
+                return
+            if attempt == attempts:
+                print(f"Sign-in still stuck on /login after {attempts} attempts: {self._login_page_state()}")
+                return
+            print(f"Sign-in stalled on /login (attempt {attempt}/{attempts}: {self._login_page_state()}); reloading and retrying...")
+            self.driver.refresh()
+            self._wait_for_login_form()
+
+    def _login_page_state(self):
+        """What the login page shows right now -- for diagnosing a sign-in that didn't complete.
+        Never includes the password value."""
+        try:
+            alerts = [e.text for e in self.driver.find_elements(
+                By.XPATH, "//*[@role='alert' or contains(@class,'red-') or contains(@class,'error')]") if e.text.strip()]
+            fields = {e.get_attribute("id"): bool(e.get_attribute("value"))
+                      for e in self.driver.find_elements(By.XPATH, "//input[@id='auth-email' or @id='auth-password']")}
+            heading = [h.text for h in self.driver.find_elements(By.XPATH, "//h1|//h2") if h.text.strip()][:2]
+            return f"url={self.driver.current_url} headings={heading} filled={fields} alerts={alerts[:3]}"
+        except Exception as e:
+            return f"(couldn't read login page state: {e})"
 
     def enter_email(self, email):
         """Waits for the email to be clickable, then clicks it."""
@@ -89,9 +132,7 @@ class HomepageHelper:
 
     def login(self, email, password):
         self.click_login_button()
-        self.enter_email(email)
-        self.enter_password(password)
-        self.click_sign_in()
+        self._submit_credentials(email, password)
 
     def wait_until_signed_in(self):
         """Waits for LoginPage's post-signin redirect (navigate(redirectTo),

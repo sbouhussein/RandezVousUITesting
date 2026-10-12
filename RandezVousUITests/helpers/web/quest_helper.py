@@ -19,6 +19,8 @@ class QuestHelper(BaseHelper):
         self.trivia_activity_locator = (By.XPATH, "//h4[normalize-space()='Trivia Activity']")
         self.complete_trivia_button = (By.XPATH, "//button[@aria-label='Complete Trivia Activity']")
         self.trivia_error_message = (By.XPATH, "//p[normalize-space()='Response is incorrect.']")
+        #Guest sign-in prompt shown when a signed-out visitor tries to complete an activity
+        self.sign_in_required_modal = (By.XPATH, "//*[normalize-space()='Sign in to complete this activity and track your points.']")
         #Prompt
         self.prompt_activity_locator = (By.XPATH, "//h4[normalize-space()='Prompt Activity']")
         self.complete_prompt_button = (By.XPATH, "//button[@aria-label='Complete Prompt Activity']")
@@ -61,10 +63,18 @@ class QuestHelper(BaseHelper):
         button = self.wait.until(EC.visibility_of_element_located(self.find_quest_button_locator))
         return button.is_enabled()
 
-    def complete_trivia_activity(self, response):
-        print("click and complete trivia activity")
+    def open_trivia_complete_form(self):
+        """Expands the Trivia accordion and presses its Complete button (for a signed-out
+        visitor this raises the sign-in modal instead of the response form)."""
         self.click(self.trivia_activity_locator)
         self.click(self.complete_trivia_button)
+
+    def is_sign_in_required_modal_visible(self):
+        return self.is_visible(self.sign_in_required_modal, custom_timeout=10)
+
+    def complete_trivia_activity(self, response):
+        print("click and complete trivia activity")
+        self.open_trivia_complete_form()
         textarea = self.click(self.text_box)
         textarea.clear()
         print("Entering response")

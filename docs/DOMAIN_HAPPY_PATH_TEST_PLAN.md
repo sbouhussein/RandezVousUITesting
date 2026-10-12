@@ -12,8 +12,8 @@ blocks automated/webdriver browsers).
 
 ## Blocker — must be resolved first, before any other step here
 
-**All web automation in this repo currently runs against the real prod
-Firebase project, not `randezvous-qa`.**
+**[Resolved] Web automation previously ran against the real prod Firebase project; it now runs
+against `randezvous-qa` (see the checklist below and CLAUDE.md's "Web fixtures").**
 
 `conftest.py`'s `web_servers` fixture launches the app under test via
 `npm run start:prod`, with its own comment confirming this is deliberate:
@@ -33,21 +33,25 @@ none of the work below should be built, let alone run.
 
 ### Blocker checklist
 
-- [ ] Switch `web_servers` (conftest.py) to launch rvsite via `npm start`
+- [x] Switch `web_servers` (conftest.py) to launch rvsite via `npm start`
       (QA, port 5174/3000) instead of `npm run start:prod`, and update every
       `BASE_URL`/port reference in `helpers/web/quest_test_data.py` and
       elsewhere that hardcodes `5173`/prod assumptions.
-- [ ] Swap `private/service-account-key.json` for the `randezvous-qa`
-      project's service account key (currently prod's, per the default
-      pointed at by `firebase_init`).
-- [ ] Confirm `FIREBASE_APP_CHECK_DEBUG_TOKEN` in `.env` is the QA-project
+- [x] Swap `private/service-account-key.json` for the `randezvous-qa`
+      project's service account key -- done: `firebase_init` now always uses
+      `private/service-account-key-qa.json`. (Note this makes Admin calls hit
+      QA while the web server is still prod until the first box is done.)
+- [x] Confirm `FIREBASE_APP_CHECK_DEBUG_TOKEN` in `.env` is the QA-project
       debug token, not prod's.
 - [ ] Re-run the full existing suite against QA and confirm it's still green
       — this also validates QA has the Auth providers and Firestore state
       (rules/indexes/seed data) the current tests depend on.
-- [ ] Fix `CLAUDE.md` / `docs/CLAUDE_GUIDELINES.md` to describe the actual
+- [x] Fix `CLAUDE.md` / `docs/CLAUDE_GUIDELINES.md` to describe the actual
       QA-pointed command, so this doesn't silently drift back to prod later.
-- [ ] Confirm QA's seeded test org/quest data (`ORG_ID`, `RESTRICTED_QUEST_ID`,
+      (`CLAUDE.md` now documents the key switch and the `start:prod` gap;
+      `docs/CLAUDE_GUIDELINES.md` and the command itself still need updating
+      once the first box is done.)
+- [x] Confirm QA's seeded test org/quest data (`ORG_ID`, `RESTRICTED_QUEST_ID`,
       etc. in `quest_test_data.py`) actually exists in `randezvous-qa` — it
       was copied from prod's rules/indexes, not necessarily its documents.
 
@@ -65,6 +69,16 @@ the same privileged credential the backend itself already depends on to
 run at all. Scoped to QA, this fabricates a realistic account state without
 needing real Google Workspace credentials or automating Google's OAuth
 popup (which webdriver-controlled browsers can't get through anyway).
+
+## Status
+
+Built (desktop path): `helpers/web/google_identity_helper.py` (custom-token sign-in bridge, refuses to
+run unless the Admin app is on `randezvous-qa`), a persistent fabricated Google-provider account
+(`google_domain_user@randezvous.com`, seeded by `scripts/firebase/seed_qa_web_fixtures.py`), and
+`tests/web/suite_Domain_Specific_Tests/tst_join_domain_quest_with_correct_domain`. Differences from the
+plan below: the account is persistent (not created/deleted per run), and the session is established by
+POSTing to `/api/auth/session-login` through the app's own `apiClient` from the page. Not built:
+the mobile-Chrome variant.
 
 ## Plan (after the blocker is cleared)
 
@@ -86,7 +100,7 @@ popup (which webdriver-controlled browsers can't get through anyway).
    sign-in would, without touching Google's OAuth servers.
 
 3. **Tests** — new suite entries alongside
-   `tests/web/suite_Quest_Onboarding_Access/`:
+   `tests/web/android/suite_Quest_Onboarding_Access/`:
    - `tst_onboarding_domain_restricted_happy_path_mobile` — correct-domain
      signed-in user hits `onboarding_url(RESTRICTED_QUEST_ID)` on
      `mobile_chrome_driver`, completes "Continue on web" (or the Android

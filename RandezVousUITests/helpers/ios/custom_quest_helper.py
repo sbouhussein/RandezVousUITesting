@@ -20,7 +20,6 @@ class QuestHelper(BaseHelper, LoginPageHelper, ProfileHelper):
     participants_tab = (AppiumBy.ACCESSIBILITY_ID, " Participants ")
 
     quests_header = (AppiumBy.ACCESSIBILITY_ID, "Quests")
-    leaderboard_button = (AppiumBy.IOS_PREDICATE, "label == 'Leaderboard'")
     active_badge = (AppiumBy.ACCESSIBILITY_ID, "Active")
     custom_quest_button = (AppiumBy.ACCESSIBILITY_ID, "Find")
     join_quest_page = (AppiumBy.ACCESSIBILITY_ID, "Find a Quest")
@@ -36,9 +35,18 @@ class QuestHelper(BaseHelper, LoginPageHelper, ProfileHelper):
 
     def navigate_to_quests_tab(self):
         print("Navigating to Quests Tab")
-        self.wait.until(EC.element_to_be_clickable(self.quests_tab)).click()
-        assert self.wait.until(EC.visibility_of_element_located(self.quests_header)).is_displayed(), \
-            "Quests page header not visible after clicking tab"
+        # Right after a real login the app is still settling and the first tap
+        # on the tab is sometimes swallowed (tab found and "clicked", page never
+        # changes), so retry the tap instead of failing on the first miss.
+        attempts = 3
+        for attempt in range(1, attempts + 1):
+            self.wait.until(EC.element_to_be_clickable(self.quests_tab)).click()
+            try:
+                WebDriverWait(self.driver, 8).until(EC.visibility_of_element_located(self.quests_header))
+                return
+            except TimeoutException:
+                print(f"Quests page did not open (attempt {attempt}/{attempts}); retrying tap")
+        raise AssertionError("Quests page header not visible after clicking tab")
 
     def click_custom_quest_button(self):
         self.wait.until(EC.element_to_be_clickable(self.custom_quest_button)).click()
@@ -59,31 +67,6 @@ class QuestHelper(BaseHelper, LoginPageHelper, ProfileHelper):
             return self.wait.until(EC.visibility_of_element_located(self.active_badge)).is_displayed()
         except Exception:
             return False
-
-    def click_leaderboard_button(self):
-        self.wait.until(EC.element_to_be_clickable(self.leaderboard_button)).click()
-        print(f"Clicking LeaderBoard Button")
-
-    def check_leaderboard(self, expected_username, expected_score):
-        self.click_leaderboard_button()
-        row_xpath = f'//XCUIElementTypeCell[descendant::XCUIElementTypeStaticText[@name="{expected_username}"]]'
-        print(f"Searching for row belonging to user: '{expected_username}'...")
-
-        parent_cell = WebDriverWait(self.driver, 10).until(
-            EC.presence_of_element_located((AppiumBy.XPATH, row_xpath))
-        )
-
-        text_elements = parent_cell.find_elements(AppiumBy.CLASS_NAME, "XCUIElementTypeStaticText")
-        actual_username = text_elements[0].get_attribute("name")
-        actual_score = text_elements[1].get_attribute("name")
-
-        print(f"Row Found -> Extracted User: '{actual_username}' | Extracted Score: '{actual_score}'")
-
-        assert actual_username == expected_username, f"Username mismatch! Expected '{expected_username}' but found '{actual_username}'"
-        assert actual_score == expected_score, f"Score mismatch for {expected_username}! Expected '{expected_score}' but found '{actual_score}'"
-
-        print(f"Success! Verified score for {actual_username} matches expected value of {actual_score}.")
-        self.navigate_to_quests_tab()
 
     def sign_out_if_signed_in(self):
         if self.is_visible(self.tab_bar):
@@ -128,6 +111,11 @@ class CustomQuestPage(BaseHelper):
     finish_quest_button = (AppiumBy.ACCESSIBILITY_ID, "Finish Quest")
     log_in_button = (AppiumBy.ACCESSIBILITY_ID, "Log in")
     prompt_nav_bar = (AppiumBy.ACCESSIBILITY_ID, "Prompt Activity")
+    trivia_incorrect_message = (AppiumBy.ACCESSIBILITY_ID, "Not quite, try again.")
+    # Custom-quest wording (PromptResponseView.swift / QuestProgressView.swift):
+    # out of range shows this text in place of the "Complete in Quest" button
+    # entirely, rather than letting the tap happen and erroring afterward.
+    out_of_range_message = (AppiumBy.IOS_PREDICATE, 'label CONTAINS "away from being able to complete this activity"')
 
     """""Universal functions"""
     def join_custom_quest(self, quest_code):
@@ -138,7 +126,10 @@ class CustomQuestPage(BaseHelper):
         self.enter_quest_code(quest_code)
         self.click_find_quest()
         self.click_start_quest()
-        self.wait.until(EC.visibility_of_element_located((AppiumBy.ACCESSIBILITY_ID, "Quests")))
+        # Starting a quest for the first time drops the user straight into
+        # the quest detail screen (not back to the Quests list), so confirm
+        # success via a marker that's actually on that screen.
+        self.wait.until(EC.visibility_of_element_located(self.primary_exit_quest_button))
 
     def enter_quest_code(self, code):
         field = self.wait.until(EC.element_to_be_clickable(self.quest_code_input_field))
@@ -304,6 +295,22 @@ class CustomQuestPage(BaseHelper):
         self.click_out_of_activity()
         self.click_back()
 
+    def attempt_trivia_activity(self, activity, response_text):
+        """Like complete_trivia_activity, but stops right after checking the
+        answer -- doesn't assume success, so a caller can check either
+        outcome (e.g. the incorrect-answer message)."""
+        self.click_trivia_activity(activity)
+        self.click_check_requirements()
+        self.click_view_prompt()
+        self.enter_prompt(response_text)
+        self.click_check_answer()
+
+    def is_trivia_incorrect_message_visible(self):
+        try:
+            return self.wait.until(EC.visibility_of_element_located(self.trivia_incorrect_message)).is_displayed()
+        except TimeoutException:
+            return False
+
     """" Honor Based Activity"""
     def click_add_to_quest_button(self):
         assert self.wait.until(EC.visibility_of_element_located((AppiumBy.ACCESSIBILITY_ID, "Honor Code Activity")))
@@ -341,6 +348,18 @@ class CustomQuestPage(BaseHelper):
         self.click_complete_quest_button()
         self.dismiss_rating_popup_if_present()
         self.click_back()
+
+    def is_out_of_range_message_visible(self, activity):
+        """When out of range, View Quest Requirements shows a distance
+        message (e.g. "You're 170 mi away from being able to complete this
+        activity in your quest") instead of a usable 'Complete in Quest'
+        button."""
+        self.click_activity(activity)
+        self.click_check_requirements()
+        try:
+            return self.wait.until(EC.visibility_of_element_located(self.out_of_range_message)).is_displayed()
+        except TimeoutException:
+            return False
 
     """" Photo Based Activity"""
     def click_submit_photo_button(self):
@@ -408,11 +427,14 @@ class CustomQuestPage(BaseHelper):
         self.click_back()
 
     def complete_all_activities(self):
-        self.complete_trivia_activity("Trivia Activity", "Trivia")
-        self.complete_photo_activity("Photo Activity")
-        self.complete_location_activity("Location Activity")
-        self.complete_honor_based_activity("Honor Code Activity")
-        self.complete_prompt_activity("Prompt Activity", "Prompt")
+        # Activity cards are labeled by their bare type ("Trivia", "Honor",
+        # etc.) -- not "Trivia Activity"/"Honor Code Activity" -- confirmed
+        # via live page_source dump against randezvous-qa's test-automation-quest.
+        self.complete_trivia_activity("Trivia", "Trivia")
+        self.complete_photo_activity("Photo")
+        self.complete_location_activity("Location")
+        self.complete_honor_based_activity("Honor")
+        self.complete_prompt_activity("Prompt", "Prompt")
 
     def click_out_of_finish_quest(self):
         self.wait.until(EC.element_to_be_clickable(self.quests_nav_bar)).click()

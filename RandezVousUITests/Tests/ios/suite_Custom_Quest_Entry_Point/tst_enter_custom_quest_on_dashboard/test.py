@@ -7,7 +7,7 @@ from helpers.ios.login_page_helper import LoginPageHelper
 
 @pytest.mark.cleanup(type="username", value="AutomatedTester")
 def test_enter_custom_quest_on_dashboard(rv_driver):
-    quest = "testautomationQuest"
+    quest = "test-automation-quest"
 
     driver = rv_driver
     dashboard = DashboardOverlay(driver)

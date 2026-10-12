@@ -28,3 +28,10 @@ def ban_user_from_quest(email, org_id, qid, reason="Automated test restriction")
 
 def unban_user(org_id, uid):
     firestore.client().collection("Organizations").document(org_id).collection("restricted").document(uid).delete()
+
+
+def has_quest_grant(email, qid):
+    """True if `email`'s user holds a questGrants doc for `qid` -- written by /api/quest/join only after
+    its access checks (domain policy, bans) pass, so it's the backend's own proof the join succeeded."""
+    uid = fb_auth.get_user_by_email(email).uid
+    return firestore.client().collection("Users").document(uid).collection("questGrants").document(qid).get().exists

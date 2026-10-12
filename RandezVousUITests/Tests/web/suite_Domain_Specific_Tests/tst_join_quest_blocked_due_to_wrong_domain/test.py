@@ -5,18 +5,19 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from helpers.web.homepage_helper import HomepageHelper
 from helpers.web.quest_helper import QuestHelper
+from helpers.web.quest_test_data import BASE_URL, RESTRICTED_QUEST_ID
 
 
 @pytest.mark.cleanup(type="email", value="unauthorized_domain_user@yahoo.com")
 def test_join_quest_blocked_wrong_domain(desktop_safari_driver):
     print("\n--- Starting test: test_join_quest_blocked_wrong_domain ---")
 
-    print("Navigating to http://localhost:5173")
-    desktop_safari_driver.get("http://localhost:5173")
+    print(f"Navigating to {BASE_URL}")
+    desktop_safari_driver.get(BASE_URL)
 
     email = "unauthorized_domain_user@yahoo.com"
     password = "OmarTest123"
-    domain_protected_quest_code = "TestAutomationActivityQuest"
+    domain_protected_quest_code = RESTRICTED_QUEST_ID
 
     nav = HomepageHelper(desktop_safari_driver)
     quest = QuestHelper(desktop_safari_driver)

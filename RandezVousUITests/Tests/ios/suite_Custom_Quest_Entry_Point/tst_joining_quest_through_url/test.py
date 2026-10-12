@@ -3,7 +3,7 @@ import pytest
 from helpers.ios.firebase_cleanup_helper import cleanup_user_data
 from helpers.ios.login_page_helper import WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
 
-QUEST_URL = "https://www.randezvous.com/quest/organization/test-3hmYPwC0cFa6zch5syk7/testautomationQuest/onboarding"
+QUEST_URL = "https://www.randezvous.com/quest/organization/test-org/test-automation-quest/onboarding"
 
 @pytest.fixture(autouse=True)
 def clean_user_data():

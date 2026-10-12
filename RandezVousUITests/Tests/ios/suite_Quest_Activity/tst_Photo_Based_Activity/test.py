@@ -6,8 +6,8 @@ from helpers.ios.login_page_helper import LoginPageHelper
 def test_photo_based_activity(rv_driver):
     email = "oalson123@gmail.com"
     password = "OmarTest123"
-    quest = "TestAutomationActivityQuest"
-    activity = "Photo Activity"
+    quest = "test-automation-quest"
+    activity = "Photo"
 
     custom_quest = CustomQuestPage(rv_driver)
     login_helper = LoginPageHelper(rv_driver)

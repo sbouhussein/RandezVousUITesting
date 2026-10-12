@@ -11,11 +11,23 @@ class AccessControlHelper(BaseHelper):
     switch_accounts_button = (By.XPATH, "//button[normalize-space()='Switch accounts']")
     sign_in_with_google_button = (By.XPATH, "//button[contains(normalize-space(), 'Sign in with Google')]")
 
+    # QuestOnboarding's AccessErrorPanel message for a Google account on the wrong domain
+    wrong_domain_message = (
+        By.XPATH, "//p[contains(normalize-space(), 'requires a @') and contains(., 'You are signed in with @')]"
+    )
+
     # TeamView's isRestrictedTeaser screen (wrong-domain, no ban)
     restricted_quest_heading = (By.XPATH, "//h2[normalize-space()='Restricted Quest']")
     domain_requirement_text = (
         By.XPATH, "//*[contains(normalize-space(), 'Requires a') and contains(., 'Google account')]"
     )
+
+    def is_wrong_domain_message_visible(self, custom_timeout=None):
+        """The AccessErrorPanel's "requires a @<domain> account. You are signed in with @<other>" text."""
+        return self.is_visible(self.wrong_domain_message, custom_timeout)
+
+    def get_wrong_domain_message(self):
+        return self.driver.find_element(*self.wrong_domain_message).text
 
     def is_restricted_banner_visible(self, custom_timeout=None):
         """The banned-user RestrictedBanner, regardless of which page rendered it."""

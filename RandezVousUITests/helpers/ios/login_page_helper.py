@@ -83,7 +83,10 @@ class WelcomeToQuestHelper:
         self.wait = WebDriverWait(self.driver, 15)
 
     trophy_icon_image = (AppiumBy.ACCESSIBILITY_ID, "trophy.fill")
-    welcome_header_text = (AppiumBy.ACCESSIBILITY_ID, "Welcome to automation2!")
+    # The header reads "Welcome to {quest.title}!" -- title varies per quest
+    # (e.g. prod's "automation2" vs QA's "Test Automation Quest"), so match on
+    # a prefix instead of a specific quest's exact accessibility id.
+    welcome_header_text = (AppiumBy.IOS_PREDICATE, "label BEGINSWITH 'Welcome to'")
     guest_onboarding_description_text = (AppiumBy.ACCESSIBILITY_ID,
                                          "Let's get you set up with a temporary guest profile so you can join the fun. You can create a full account later to save your progress.")
     lets_go_button = (AppiumBy.ACCESSIBILITY_ID, "Let's Go")
