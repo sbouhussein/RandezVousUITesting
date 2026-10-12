@@ -38,14 +38,17 @@ Android (`android_chrome_driver`): `./setup.sh` runs `scripts/setup_android.sh`,
 # Run everything
 pytest RandezVousUITests
 
-# Run one test (path convention: tests/<suite>/tst_<name>/test.py)
-pytest RandezVousUITests/tests/ios/suite_quest_activity/tst_complete_quest_from_login/test.py
+# Run one test (path convention: Tests/<platform>/suite_<area>/tst_<name>/test.py -- note the capital T;
+# pytest.ini's `testpaths = tests` doesn't match the real `Tests/` folder, so always pass an explicit path)
+pytest RandezVousUITests/Tests/ios/suite_Quest_Activity/tst_Complete_Quest_From_Login/test.py --udid <simulator-udid>
 
-# Run by test name
-pytest -k "complete_quest_from_login"
+# Run by test name (with a path, e.g. `pytest RandezVousUITests/Tests -k "complete_quest_from_login"`)
 
-# Headless (no visible simulator window)
-pytest RandezVousUITests/tests/ios/suite_quest_activity/tst_complete_quest_from_login/test.py --headless
+# Web tests without a window taking over your screen (desktop Safari can't run headless)
+pytest RandezVousUITests/Tests/web --browser chrome --headless
+
+# iOS headless (no visible simulator window)
+pytest RandezVousUITests/Tests/ios/suite_Quest_Activity/tst_Complete_Quest_From_Login/test.py --udid <simulator-udid> --headless
 
 # Verbose + stop on first failure + show prints
 pytest -s -v --maxfail=1
@@ -64,7 +67,7 @@ Every test run auto-generates an HTML dashboard in `RandezVousUITests/reports/Ex
 - **`rv_driver`**: fresh Appium session against the RandezVous iOS app (`RV_BUNDLE_ID`), full reset each test. Default fixture for iOS tests.
 - **`rv_driver_no_reset`**: same but `noReset=True` — use when a test needs to preserve app state from a prior session.
 - **`safari_driver`**: Appium session against mobile Safari (`SAFARI_BUNDLE_ID`) — for iOS deep-link flows that start in a browser.
-- **`desktop_safari_driver`**: native macOS Desktop Safari (or Chrome/Firefox via `--browser`), navigates to `http://localhost:5174`, clears local/session storage, waits for React to hydrate (a visible header "Login" link or email input — the root route is the marketing landing page). Used by all web tests.
+- **`desktop_safari_driver`**: native macOS Desktop Safari (or Chrome/Firefox via `--browser`), navigates to `http://localhost:5174`, clears local/session storage, waits for React to hydrate (a visible header "Login" link or email input — the root route is the marketing landing page). Used by all web tests. Teardown (in a `try/finally`, so it also runs when setup fails) closes every window, quits the driver, and — for Safari — ends that session's own `Safari --automation` process, which `driver.quit()` otherwise leaves running and which blocks the next session ("already paired with a different session"); it prints "Safari automation processes left after teardown: N" (should be 0). Safari takes over the screen for the whole run; use `--browser chrome --headless` to avoid that.
 - **`mobile_chrome_driver`**: desktop Chrome pinned to an Android user-agent string — cheap way to make `rvsite`'s `detectPlatform()` treat the session as a phone browser without needing a real device; can only observe the fallback *href*, not real intent-link navigation.
 - **`android_chrome_driver`**: real mobile Chrome on an Android emulator/device via Appium's UiAutomator2 driver — the Android counterpart to `safari_driver`, and what actually exercises Android's intent-link resolution (`mobile_chrome_driver` can't). Resolves the target device from `ANDROID_UDID` or, if unset, whatever single device `adb devices` reports. Runs `adb reverse` for ports 5174/3000 on setup (removed on teardown) so the emulator's own `localhost` reaches the host's dev servers. RV's TWA (`com.randezvous.RandezVous`, `RV_ANDROID_PACKAGE`) is already live on Google Play — see `rvsite/public/.well-known/assetlinks.json` — so this same setup could later drive it directly via `appPackage`/`appActivity` instead of the browser.
 - **`restart_node_server_for_web`** (function scope, autouse, only for tests under a `/web/` path): kills anything on ports 3000/5173/5174, runs `npm start` in `WEB_APP_PATH` (rvsite's QA target: backend + Vite `--mode qa` together; never `start:prod`), polls both ports until ready, tears down after the test. This means **web tests require the `RandezVousSite/rvsite` repo to be checked out and runnable** at `WEB_APP_PATH`.
@@ -74,6 +77,8 @@ Every test run auto-generates an HTML dashboard in `RandezVousUITests/reports/Ex
 ### Page Object Model — `helpers/`
 
 Split by platform: `helpers/ios/`, `helpers/android/`, and `helpers/web/`. `helpers/ios/` and `helpers/web/` each have their own `base_helper.py` defining `BaseHelper` (wraps `WebDriverWait`, exposes `is_visible()` / `click()`). The web `click()` additionally scrolls the element into view and falls back to a JS click if a native click is intercepted (common with sticky headers/overlays). `helpers/android/` currently just has `device_helper.py` — Android tests otherwise reuse `helpers/web/`'s page objects against `android_chrome_driver`, since it's still driving a browser. Both platforms' `DeviceHelper` (install-state / foreground checks) subclass `helpers/common/device_helper_base.py`'s `DeviceHelperBase`, keyed by whichever app identifier the platform uses (bundle ID on iOS, package name on Android).
+
+`HomepageHelper.login()` / `login_from_url()` go through `_submit_credentials`, which retries a stalled Firebase sign-in (page stays on `/login`, form filled, no error — or `auth/network-request-failed`) by reloading the login page and resubmitting up to 3 times. Root cause of the stall is unresolved and it is still intermittent in desktop Safari; see the README's Known Quirks.
 
 Convention per helper class:
 - Locators are **class-level attributes**, not set in `__init__`, so they're inspectable without instantiating.

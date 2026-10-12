@@ -20,7 +20,7 @@ against `randezvous-qa` (see the checklist below and CLAUDE.md's "Web fixtures")
 `start:prod`, despite the name, is rvsite's explicit opt-in to the real prod
 Firebase config (see `rvsite/CLAUDE.md`: `npm start` = QA on 5174, `npm run
 start:prod` = prod, explicit opt-in, not the default). `docs/CLAUDE_GUIDELINES.md`
-and this repo's own `CLAUDE.md` describe `restart_node_server_for_web` as
+(not present in this repo) and this repo's own `CLAUDE.md` described `restart_node_server_for_web` as
 running `npm start` — that description is stale; the code it documents
 now runs `npm run start:prod`.
 
@@ -43,7 +43,9 @@ none of the work below should be built, let alone run.
       QA while the web server is still prod until the first box is done.)
 - [x] Confirm `FIREBASE_APP_CHECK_DEBUG_TOKEN` in `.env` is the QA-project
       debug token, not prod's.
-- [ ] Re-run the full existing suite against QA and confirm it's still green
+- [ ] Re-run the full existing suite against QA and confirm it's still green (not yet: the last full
+      Chrome-headless runs were 21-22 passed / 2 always-skipped / 0-1 flaky, and a full desktop-Safari
+      pass was never completed)
       — this also validates QA has the Auth providers and Firestore state
       (rules/indexes/seed data) the current tests depend on.
 - [x] Fix `CLAUDE.md` / `docs/CLAUDE_GUIDELINES.md` to describe the actual
@@ -71,6 +73,10 @@ needing real Google Workspace credentials or automating Google's OAuth
 popup (which webdriver-controlled browsers can't get through anyway).
 
 ## Status
+
+Also built: the unhappy path, `tst_join_domain_quest_blocked_for_wrong_google_domain` (a second fabricated
+account, `google_wrong_domain_user@gmail.com`, is refused with "requires a @randezvous.com account. You are
+signed in with @gmail.com", gets a Switch-accounts button, never reaches the quest, and gets no grant).
 
 Built (desktop path): `helpers/web/google_identity_helper.py` (custom-token sign-in bridge, refuses to
 run unless the Admin app is on `randezvous-qa`), a persistent fabricated Google-provider account
