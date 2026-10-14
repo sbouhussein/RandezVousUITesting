@@ -1,5 +1,8 @@
 import datetime
 import os
+import re
+import shutil
+import signal
 import time
 import subprocess
 import firebase_admin
@@ -18,6 +21,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 
 from helpers.ios.firebase_cleanup_helper import cleanup_user_data
+from helpers.web import quest_test_data
 from helpers.web.homepage_helper import HomepageHelper
 import socket
 import subprocess
@@ -41,6 +45,78 @@ def pytest_addoption(parser):
     parser.addoption("--headless", action="store_true", help="Run the simulator/browser in headless mode")
     parser.addoption("--browser", action="store", default="safari", choices=["safari", "chrome", "firefox"],
                       help="Desktop browser for web tests (Safari has no headless mode)")
+
+def _quit_driver_safely(driver):
+    """Close every window, then quit -- each step best-effort so one failure can't leave the
+    browser (and its tabs) open. Safari leaves its automation windows behind if the session
+    isn't ended cleanly."""
+    try:
+        for handle in list(driver.window_handles):
+            driver.switch_to.window(handle)
+            driver.close()
+    except Exception:
+        pass
+    try:
+        driver.quit()
+    except Exception:
+        pass
+
+
+_SAFARI_AUTOMATION_PATTERN = "Safari.app/Contents/MacOS/Safari --automation"
+
+
+def _safari_automation_pids():
+    out = subprocess.run(["pgrep", "-f", _SAFARI_AUTOMATION_PATTERN], capture_output=True, text=True).stdout
+    return {int(p) for p in out.split()}
+
+
+def _end_safari_automation(pids, grace=3.0, term_wait=5.0):
+    """driver.quit() ends the WebDriver session but leaves its `Safari --automation` process
+    running indefinitely; the next session then fails with "Safari instance is already paired
+    with a different session". Give `pids` (this session's own process) a moment to exit by
+    itself, then SIGTERM, then SIGKILL. Never touches any other Safari process."""
+    def alive(pid):
+        try:
+            os.kill(pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+
+    def wait_gone(timeout):
+        end = time.time() + timeout
+        while time.time() < end and any(alive(p) for p in pids):
+            time.sleep(0.25)
+        return not any(alive(p) for p in pids)
+
+    if wait_gone(grace):
+        return
+    for sig, wait in ((signal.SIGTERM, term_wait), (signal.SIGKILL, 2.0)):
+        for pid in pids:
+            try:
+                os.kill(pid, sig)
+            except ProcessLookupError:
+                pass
+        if wait_gone(wait):
+            return
+
+
+def _sweep_leaked_safari_windows():
+    """Ends orphaned Safari automation sessions (left by killed or crashed runs, which skip fixture
+    teardown). Each safaridriver session is its own `Safari --automation` process -- a leaked one
+    keeps a whole Safari instance and its tabs alive -- so kill exactly those. The user's own
+    Safari is a different process without --automation and is never touched."""
+    subprocess.run(["pkill", "-x", "safaridriver"], capture_output=True)
+    subprocess.run(["pkill", "-f", "Safari.app/Contents/MacOS/Safari --automation"], capture_output=True)
+
+
+def _web_target(request):
+    """(npm script, port) for rvsite's dev servers. `npm start` is rvsite's QA target:
+    Vite --mode qa on 5174 plus the backend on 3000 (backend/.env.qa), both against
+    randezvous-qa -- the same project firebase_init and the seeded fixtures use. Never
+    `start:prod`: web tests must not touch the prod Firebase project."""
+    return "start", quest_test_data.WEB_PORT
 
 def is_port_in_use(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -107,6 +183,24 @@ def appium_server():
     finally:
         log_fd.close()
 
+
+@pytest.fixture(scope="session")
+def seed_simulator_photos(request):
+    """Ensures the simulator's Photos library has at least one image, once
+    per session. complete_photo_activity()'s picker step depends on a real
+    photo existing -- previously it relied on whatever screenshots happened
+    to already be in the camera roll on someone's machine. simctl addmedia
+    is idempotent to call repeatedly (just adds another photo), so this is
+    safe to run every session regardless of what's already there."""
+    target_udid = request.config.getoption("--udid")
+    sample_photo = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "sample_photo.png")
+    subprocess.run(
+        ["xcrun", "simctl", "addmedia", target_udid, sample_photo],
+        capture_output=True, text=True,
+    )
+    yield
+
+
 def _build_options(bundle_id, udid, no_reset=False, is_headless=False):
     options = AppiumOptions()
     options.set_capability("platformName", "iOS")
@@ -140,10 +234,80 @@ def _build_options(bundle_id, udid, no_reset=False, is_headless=False):
     return options
 
 
+# Lines worth surfacing straight into the test's own captured output --
+# network-level evidence for auth/App Check failures (status codes, the
+# request URL, and any server error body) without having to go dig through
+# the saved log file by hand.
+_NETWORK_LOG_PATTERN = re.compile(
+    r"CFNetwork|cloudfunctions|\.run\.app|firebaseappcheck|googleapis\.com|"
+    r"AppCheck|Unauthenticated|Must be signed in|status \d{3}|response_status=\d+",
+    re.IGNORECASE,
+)
+
+
 @pytest.fixture
-def rv_driver(request, appium_server):
+def ios_device_log(request):
+    """Pulls the simulator's console log (os_log) covering an iOS test's
+    duration, filtered to the RandezVous process -- this is where CFNetwork
+    request/response status lines live, useful for telling an App Check
+    rejection apart from a Cloud Function's own auth check (both surface as
+    the same generic "Unauthenticated" error client-side -- see memory:
+    project_qa_unauthenticated_join).
+
+    Uses `log show --last <Ns>` *after* the test finishes rather than a live
+    `log stream` -- streaming proved unreliable (attached too late or not at
+    all); `--last` reads back from the persisted log and has been verified
+    to reliably return matching entries. `--start <timestamp>` was tried
+    first and silently returned zero rows because `log show` interprets
+    --start as local time -- a UTC-computed timestamp pointed hours off.
+
+    Saved regardless of pass/fail to Tests/logs/device_console/<test_name>.log;
+    network-relevant lines are also echoed into this test's own captured
+    output so they show up directly in a PyCharm/CLI run without opening a
+    separate file."""
+    target_udid = request.config.getoption("--udid")
+    start = time.time()
+
+    yield
+
+    elapsed_seconds = int(time.time() - start) + 5  # small buffer for log-write lag
+    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Tests", "logs", "device_console")
+    os.makedirs(log_dir, exist_ok=True)
+    safe_name = re.sub(r"[^\w.-]", "_", request.node.name)
+    log_path = os.path.join(log_dir, f"{safe_name}.log")
+
+    result = subprocess.run(
+        ["xcrun", "simctl", "spawn", target_udid, "log", "show",
+         "--debug", "--info",  # "log show" (unlike "log stream") takes these as bare flags, not --level
+         "--predicate", 'process == "RandezVous"',
+         "--style", "compact",
+         "--last", f"{elapsed_seconds}s"],
+        capture_output=True, text=True,
+    )
+    with open(log_path, "w", encoding="utf-8") as f:
+        f.write(result.stdout)
+
+    network_lines = [line for line in result.stdout.splitlines() if _NETWORK_LOG_PATTERN.search(line)]
+
+    print(f"\n📱 Device console log saved to: {log_path}")
+    if network_lines:
+        print("📡 Network-relevant lines from this test:")
+        for line in network_lines:
+            print(f"    {line}")
+    else:
+        print("📡 No network-relevant lines found in this test's window.")
+
+
+@pytest.fixture
+def rv_driver(request, appium_server, ios_device_log, seed_simulator_photos):
     target_udid = request.config.getoption("--udid")
     target_headless = request.config.getoption("--headless")
+
+    # Simulated location persists on the simulator after a test ends. The
+    # out-of-range location tests leave it far from every quest, and the next
+    # test then fails at Quests-tab navigation -- so start each test clean.
+    subprocess.run(["xcrun", "simctl", "location", target_udid, "clear"], capture_output=True)
+    time.sleep(3)  # locationd needs a moment to apply the clear before the app launches
 
     # Pass the extracted UDID into your options builder
     driver = appium_webdriver.Remote(
@@ -211,14 +375,16 @@ def mobile_chrome_driver(request):
         options.add_argument("--headless=new")
     driver = webdriver.Chrome(options=options)
 
-    driver.get("http://localhost:5173")
-    wait = WebDriverWait(driver, 10)
-    wait.until(lambda d: d.execute_script("return document.readyState") == "complete")
-    driver.execute_script("window.localStorage.clear();")
-    driver.execute_script("window.sessionStorage.clear();")
+    try:
+        driver.get(quest_test_data.BASE_URL)
+        wait = WebDriverWait(driver, 10)
+        wait.until(lambda d: d.execute_script("return document.readyState") == "complete")
+        driver.execute_script("window.localStorage.clear();")
+        driver.execute_script("window.sessionStorage.clear();")
 
-    yield driver
-    driver.quit()
+        yield driver
+    finally:
+        _quit_driver_safely(driver)
 
 
 @pytest.fixture
@@ -228,40 +394,55 @@ def desktop_safari_driver(request):
     Firefox just need to be installed."""
     browser = request.config.getoption("--browser")
     headless = request.config.getoption("--headless")
+    safari_pids_before = _safari_automation_pids() if browser == "safari" else set()
     driver = _build_desktop_driver(browser, headless)
-    if headless:
-        # maximize_window() has no real screen to expand to headless and can
-        # override the --window-size startup arg with something tiny --
-        # the fixed size set at launch is already what we want.
-        driver.set_window_size(1920, 1080)
-    else:
-        driver.maximize_window()
+    # The Safari process this session just started (diffed against what already existed).
+    safari_session_pids = (_safari_automation_pids() - safari_pids_before) if browser == "safari" else set()
+    try:
+        if headless:
+            # maximize_window() has no real screen to expand to headless and can
+            # override the --window-size startup arg with something tiny --
+            # the fixed size set at launch is already what we want.
+            driver.set_window_size(1920, 1080)
+        else:
+            driver.maximize_window()
 
-    # 2. Perform the initial navigation
-    print("\nNavigating to http://localhost:5173")
-    driver.get("http://localhost:5173")
+        # 2. Perform the initial navigation
+        _, web_port = _web_target(request)
+        print(f"\nNavigating to http://localhost:{web_port}")
+        driver.get(f"http://localhost:{web_port}")
 
-    # 3. Wait for the base HTML to load
-    wait = WebDriverWait(driver, 10)
-    wait.until(lambda d: d.execute_script("return document.readyState") == "complete")
+        # 3. Wait for the base HTML to load
+        wait = WebDriverWait(driver, 10)
+        wait.until(lambda d: d.execute_script("return document.readyState") == "complete")
 
-    driver.execute_script("window.localStorage.clear();")
-    driver.execute_script("window.sessionStorage.clear();")
-    driver.refresh()
+        driver.execute_script("window.localStorage.clear();")
+        driver.execute_script("window.sessionStorage.clear();")
+        driver.refresh()
 
-    # 4. Wait for React to hydrate and render the actual UI
-    wait_for_react = WebDriverWait(driver, 15)
-    print("Waiting for React to hydrate and render the login page...")
-    wait_for_react.until(EC.visibility_of_element_located((By.XPATH, "//input[@type='email']")))
+        # 4. Wait for React to hydrate. The root route is the marketing landing page (its only
+        #    email input is a hidden "Work Email" lead field), so a visible header "Login" link or a
+        #    visible email input (when a test lands on /login) is the hydration signal, not the
+        #    first email input in the DOM.
+        wait_for_react = WebDriverWait(driver, 30)
+        print("Waiting for React to hydrate...")
+        wait_for_react.until(lambda d: any(
+            e.is_displayed() for e in d.find_elements(
+                By.XPATH, "//a[normalize-space()='Login'] | //input[@type='email']")))
 
-    # 5. Hand the ready-to-use driver over to the test
-    yield driver
+        # 5. Hand the ready-to-use driver over to the test
+        yield driver
 
-    # 6. Teardown: Quit the browser after the test finishes
-    driver.quit()
+    finally:
+        # Runs even if setup/hydration raised before the yield -- otherwise the browser
+        # (and its tabs) leaked, which is how Safari instances piled up.
+        _quit_driver_safely(driver)
+        if safari_session_pids:
+            _end_safari_automation(safari_session_pids)
+            print(f"Safari automation processes left after teardown: {len(_safari_automation_pids())}")
 
 @pytest.fixture
-def rv_driver_no_reset(appium_server):
+def rv_driver_no_reset(appium_server, ios_device_log, seed_simulator_photos):
     driver = webdriver.Remote(APPIUM_SERVER_URL, options=_build_options(RV_BUNDLE_ID, no_reset=True))
     yield driver
     driver.quit()
@@ -288,6 +469,22 @@ def safari_driver(request, appium_server):
         print(f"\n Ignored driver teardown error: {e}")
 
 
+def _adb_path():
+    """adb from PATH if present, else the Android SDK's platform-tools (the standard
+    macOS location, or ANDROID_HOME/ANDROID_SDK_ROOT) -- so a fresh clone that ran
+    setup.sh works without editing a shell profile, same as appium_server's
+    ANDROID_HOME default."""
+    on_path = shutil.which("adb")
+    if on_path:
+        return on_path
+    for root in (os.environ.get("ANDROID_HOME"), os.environ.get("ANDROID_SDK_ROOT"),
+                 os.path.expanduser("~/Library/Android/sdk")):
+        candidate = os.path.join(root, "platform-tools", "adb") if root else None
+        if candidate and os.path.isfile(candidate):
+            return candidate
+    return "adb"
+
+
 def _get_android_serial():
     """Resolves which adb-visible emulator/device to target. ANDROID_UDID pins a specific
     one; otherwise falls back to whichever single device `adb devices` reports."""
@@ -296,11 +493,11 @@ def _get_android_serial():
         return env_serial
 
     try:
-        output = subprocess.run(["adb", "devices"], capture_output=True, text=True, check=True).stdout
+        output = subprocess.run([_adb_path(), "devices"], capture_output=True, text=True, check=True).stdout
     except FileNotFoundError:
         raise RuntimeError(
-            "adb not found on PATH -- install Android SDK platform-tools (bundled with "
-            "Android Studio) and add it to PATH, or point PATH at $ANDROID_HOME/platform-tools."
+            "adb not found -- run ./setup.sh to install the Android SDK (platform-tools), or "
+            "install it via Android Studio and set ANDROID_HOME."
         )
 
     serials = [
@@ -324,13 +521,13 @@ def _get_android_serial():
 def _adb_reverse_web_ports(serial, remove=False):
     """Android emulators treat 'localhost' as themselves, not the host machine -- forward
     the emulator's loopback ports to the host's Vite/backend servers so BASE_URL
-    ("http://localhost:5173", quest_test_data.py) resolves the same as every other web
+    (quest_test_data.BASE_URL) resolves the same as every other web
     driver."""
     if remove:
-        subprocess.run(["adb", "-s", serial, "reverse", "--remove-all"], capture_output=True)
+        subprocess.run([_adb_path(), "-s", serial, "reverse", "--remove-all"], capture_output=True)
         return
-    for port in ("3000", "5173"):
-        subprocess.run(["adb", "-s", serial, "reverse", f"tcp:{port}", f"tcp:{port}"], check=True)
+    for port in (quest_test_data.BACKEND_PORT, quest_test_data.WEB_PORT):
+        subprocess.run([_adb_path(), "-s", serial, "reverse", f"tcp:{port}", f"tcp:{port}"], check=True)
 
 
 def _build_android_chrome_options(serial):
@@ -381,9 +578,13 @@ def android_chrome_driver(appium_server):
 
 @pytest.fixture(scope="session", autouse=True)
 def firebase_init():
-    """Initializes Firebase using the verified absolute path."""
+    """Initializes Firebase using the verified absolute path. Always points
+    at randezvous-qa (service-account-key-qa.json, matching rvsite's own
+    QA key naming) -- prod is never used by this suite."""
+    key_filename = "service-account-key-qa.json"
+
     project_root = Path(__file__).parent.parent.resolve()
-    key_path = project_root / "private" / "service-account-key.json"
+    key_path = project_root / "private" / key_filename
 
     print(f"Checking key at absolute path: {key_path.resolve()}")
     if not key_path.exists():
@@ -937,23 +1138,26 @@ def pytest_sessionfinish(session, exitstatus):
 
 
 @pytest.fixture(scope="session")
-def web_servers():
+def web_servers(request):
     """Starts the rvsite backend + Vite dev server once per session. Output
     goes to a log file, not an unread PIPE (that used to fill up and block
     the dev server mid-request)."""
-    print("\n--- [Web Test] Cleaning up Node processes on port 3000 and 5173 ---")
-    subprocess.run(["npx", "kill-port", "3000", "5173"], capture_output=True)
+    npm_script, web_port = _web_target(request)
+
+    if request.config.getoption("--browser") == "safari":
+        _sweep_leaked_safari_windows()
+
+    print("\n--- [Web Test] Cleaning up Node processes on ports 3000, 5173, 5174 (5173 = stale prod-mode servers) ---")
+    subprocess.run(["npx", "kill-port", "3000", "5173", "5174"], capture_output=True)
 
     log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Tests", "logs")
     os.makedirs(log_dir, exist_ok=True)
     web_log_path = os.path.join(log_dir, "web_servers.log")
     web_log_fd = open(web_log_path, "w")
 
-    # start:prod, despite the name, is the plain local-dev setup (.env, port
-    # 5173) this suite needs -- `npm start` now points at QA (port 5174).
-    print(f"--- [Web Test] Starting backend and React servers via npm run start:prod (logs: {web_log_path}) ---")
+    print(f"--- [Web Test] Starting backend and React servers via npm run {npm_script} (logs: {web_log_path}) ---")
     backend_process = subprocess.Popen(
-        ["npm", "run", "start:prod"],
+        ["npm", "run", npm_script],
         cwd=WEB_APP_PATH,
         stdout=web_log_fd,
         stderr=subprocess.STDOUT,
@@ -971,22 +1175,22 @@ def web_servers():
         return False
 
     print("--- [Web Test] Waiting for backend on port 3000... ---")
-    if not wait_until_up("http://localhost:3000/api/user/profile"):
+    if not wait_until_up(f"{quest_test_data.BACKEND_URL}/api/user/profile"):
         backend_process.terminate()
         web_log_fd.close()
         raise RuntimeError(f"Backend failed to start on port 3000 within timeout. See {web_log_path}")
 
-    print("--- [Web Test] Backend ready. Waiting for React frontend on port 5173... ---")
-    if not wait_until_up("http://localhost:5173"):
+    print(f"--- [Web Test] Backend ready. Waiting for React frontend on port {web_port}... ---")
+    if not wait_until_up(f"http://localhost:{web_port}"):
         backend_process.terminate()
         web_log_fd.close()
-        raise RuntimeError(f"Vite frontend failed to start on port 5173 within timeout. See {web_log_path}")
+        raise RuntimeError(f"Vite frontend failed to start on port {web_port} within timeout. See {web_log_path}")
 
     # Best-effort warm-up: pull the index shell for the routes the tests hit
     # first so Vite's dev-time transform has a head start before test one.
     for path in ("/", "/login", "/find-quest"):
         try:
-            requests.get(f"http://localhost:5173{path}", timeout=10)
+            requests.get(f"http://localhost:{web_port}{path}", timeout=10)
         except requests.exceptions.RequestException:
             pass
 
@@ -998,7 +1202,9 @@ def web_servers():
     backend_process.terminate()
     backend_process.wait()
     web_log_fd.close()
-    subprocess.run(["npx", "kill-port", "3000", "5173"], capture_output=True)
+    subprocess.run(["npx", "kill-port", "3000", "5173", "5174"], capture_output=True)
+    if request.config.getoption("--browser") == "safari":
+        _sweep_leaked_safari_windows()
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -1025,6 +1231,7 @@ def retry_web_login(request, monkeypatch):
         return
 
     original_login = HomepageHelper.login
+    _, web_port = _web_target(request)
 
     def login_with_retry(self, email, password, attempts=3):
         for attempt in range(1, attempts + 1):
@@ -1034,7 +1241,7 @@ def retry_web_login(request, monkeypatch):
                 if attempt == attempts:
                     raise
                 print(f"Sign-in appears stuck (attempt {attempt}/{attempts}); reloading and retrying...")
-                self.driver.get("http://localhost:5173")
+                self.driver.get(f"http://localhost:{web_port}")
 
     monkeypatch.setattr(HomepageHelper, "login", login_with_retry)
     yield

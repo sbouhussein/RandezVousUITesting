@@ -9,7 +9,7 @@ from helpers.ios.sign_in_overlay_helper import DashboardOverlay
 @pytest.mark.cleanup(type="username", value="AutomatedTester")
 def test_complete_quest_from_dashboard(rv_driver):
     username = "AutomatedTester"
-    quest = "TestAutomationActivityQuest"
+    quest = "test-automation-quest"
 
     driver = rv_driver
     dashboard = DashboardOverlay(driver)

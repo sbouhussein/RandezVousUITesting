@@ -1,37 +1,43 @@
 import pytest
-import time
-from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from helpers.web.homepage_helper import HomepageHelper
+
+from helpers.web.access_control_helper import AccessControlHelper
+from helpers.web.firebase_test_data_helper import clear_stale_grant, has_quest_grant
+from helpers.web.google_identity_helper import GoogleIdentityHelper
+from helpers.web.onboarding_helper import OnboardingPageHelper
 from helpers.web.quest_helper import QuestHelper
+from helpers.web.quest_test_data import GOOGLE_DOMAIN_EMAIL, ORG_ID, RESTRICTED_QUEST_ID, onboarding_url
 
 
-@pytest.mark.cleanup(type="email", value="test_user@randezvous.com")
-def tst_join_domain_quest_with_correct_domain(desktop_safari_driver):
-    print("\n--- Starting test: tst_join_domain_quest_with_correct_domain ---")
+@pytest.mark.cleanup(type="email", value=GOOGLE_DOMAIN_EMAIL)
+def test_join_domain_quest_with_correct_domain(desktop_safari_driver):
+    """Happy path for a domain-restricted quest: a signed-in user whose Google account is on the allowed
+    domain joins `web-restricted` and lands on its quest page, with no restricted banner or locked screen.
 
-    print("Navigating to http://localhost:5173")
-    desktop_safari_driver.get("http://localhost:5173")
+    The user is a fabricated QA account with a `google.com` provider entry on @randezvous.com (see
+    seed_qa_web_fixtures.py), signed in by custom token (helpers/web/google_identity_helper.py). That
+    exercises the backend's google_hd domain check and the frontend's success rendering; it does NOT prove
+    real Google consent-screen behavior, which Selenium can't automate."""
+    driver = desktop_safari_driver
 
-    email = "test_user@randezvous.com"
-    password = "OmarTest123"
-    domain_protected_quest_code = "DomainProtectedQuest"
+    # A leftover grant would make /join return early and skip the domain check this test is about.
+    clear_stale_grant(GOOGLE_DOMAIN_EMAIL, RESTRICTED_QUEST_ID)
 
-    nav = HomepageHelper(desktop_safari_driver)
-    quest = QuestHelper(desktop_safari_driver)
+    GoogleIdentityHelper(driver).sign_in()
 
-    time.sleep(2)
-    print(f"Logging in with authorized domain user: {email}")
-    nav.login(email, password)
+    driver.get(onboarding_url(RESTRICTED_QUEST_ID))
+    OnboardingPageHelper(driver).click_start_quest()
 
-    print("Clicking 'Find Quest' navigation button...")
-    nav.click_find_quest()
-
-    print(f"Entering domain-protected quest code: {domain_protected_quest_code}")
-    quest.enter_quest_code(domain_protected_quest_code)
-
-    print("Submitting quest code lookup...")
-    quest.click_find_quest()
-
-    wait = WebDriverWait(desktop_safari_driver, 10)
+    quest = QuestHelper(driver)
+    access = AccessControlHelper(driver)
+    WebDriverWait(driver, 30).until(
+        lambda d: f"/quest/organization/{ORG_ID}/{RESTRICTED_QUEST_ID}" in d.current_url
+        and "/onboarding" not in d.current_url,
+        message="Expected to land on the quest page after starting the quest",
+    )
+    assert quest.is_visible(quest.honor_activity_locator, custom_timeout=30), \
+        "Expected the quest's activity list for a correct-domain user"
+    assert not access.is_restricted_banner_visible(custom_timeout=2), "Did not expect a restricted banner"
+    assert not access.is_restricted_quest_screen_visible(custom_timeout=2), "Did not expect the locked-quest screen"
+    assert has_quest_grant(GOOGLE_DOMAIN_EMAIL, RESTRICTED_QUEST_ID), \
+        "Expected /api/quest/join to have granted access (questGrants doc) after passing the domain check"

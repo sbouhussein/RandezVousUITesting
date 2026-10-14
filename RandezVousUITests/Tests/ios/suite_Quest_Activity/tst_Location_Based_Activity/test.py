@@ -9,8 +9,8 @@ from helpers.ios.device_helper import DeviceHelper
 def test_location_based_activity(rv_driver):
     email = "oalson123@gmail.com"
     password = "OmarTest123"
-    quest = "TestAutomationActivityQuest"
-    activity = "Location Activity"
+    quest = "test-automation-quest"
+    activity = "Location"
 
     device_helper = DeviceHelper(rv_driver)
     custom_quest = CustomQuestPage(rv_driver)

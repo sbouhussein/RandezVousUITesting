@@ -1,26 +1,20 @@
-import time
 import pytest
 
 from helpers.web.homepage_helper import HomepageHelper
 from helpers.web.quest_helper import QuestHelper
+from helpers.web.quest_test_data import ACTIVITY_QUEST_ID, BASE_URL, onboarding_url
 
 
 @pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
 def test_enter_custom_quest_from_url_not_signed_in(desktop_safari_driver):
-    desktop_safari_driver.get("http://localhost:5173")
-    email = "oalson123@gmail.com"
-    password = "OmarTest123"
-    QUEST_URL = "http://localhost:5173/quest/organization/test-3hmYPwC0cFa6zch5syk7/TestAutomationActivityQuest/onboarding"
-    response = "Trivia"
+    desktop_safari_driver.get(BASE_URL)
 
     nav = HomepageHelper(desktop_safari_driver)
     quest = QuestHelper(desktop_safari_driver)
 
-    desktop_safari_driver.get(QUEST_URL)
-    time.sleep(2)
+    desktop_safari_driver.get(onboarding_url(ACTIVITY_QUEST_ID))
     nav.click_guest_button()
-    #verify sign in pop appears
-    quest.complete_trivia_activity(response)
-    time.sleep(200)
 
-
+    quest.open_trivia_complete_form()
+    assert quest.is_sign_in_required_modal_visible(), \
+        "A guest trying to complete an activity should be prompted to sign in"

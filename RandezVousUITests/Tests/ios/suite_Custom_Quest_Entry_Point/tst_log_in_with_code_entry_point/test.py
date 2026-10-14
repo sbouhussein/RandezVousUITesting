@@ -13,7 +13,7 @@ def test_log_in_with_code_entry_point(rv_driver):
     choose_username = ChooseUsernameHelper(driver)
     start_adventure = StartAdventureHelper(driver)
     quest_helper = QuestHelper(driver)
-    quest = "testautomationQuest"
+    quest = "test-automation-quest"
 
     quest_helper.sign_out_if_signed_in()
     login_page.click_login_with_code()
