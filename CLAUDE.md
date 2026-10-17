@@ -38,17 +38,19 @@ Android (`android_chrome_driver`): `./setup.sh` runs `scripts/setup_android.sh`,
 # Run everything
 pytest RandezVousUITests
 
-# Run one test (path convention: Tests/<platform>/suite_<area>/tst_<name>/test.py -- note the capital T;
-# pytest.ini's `testpaths = tests` doesn't match the real `Tests/` folder, so always pass an explicit path)
-pytest RandezVousUITests/Tests/ios/suite_Quest_Activity/tst_Complete_Quest_From_Login/test.py --udid <simulator-udid>
+# Run one test (path convention: tests/<platform>/suite_<area>/tst_<name>/test.py).
+# Use the on-disk casing: git tracks some dirs as `Tests/` / `suite_Quest_Activity`, but the disk has
+# `tests/` / `suite_quest_activity`, and pytest matches paths case-sensitively ("ERROR: not found").
+pytest RandezVousUITests/tests/ios/suite_quest_activity/tst_complete_quest_from_login/test.py --udid <simulator-udid>
 
-# Run by test name (with a path, e.g. `pytest RandezVousUITests/Tests -k "complete_quest_from_login"`)
+# Run by test name
+pytest RandezVousUITests/tests -k "complete_quest_from_login"
 
 # Web tests without a window taking over your screen (desktop Safari can't run headless)
-pytest RandezVousUITests/Tests/web --browser chrome --headless
+pytest RandezVousUITests/tests/web --browser chrome --headless
 
 # iOS headless (no visible simulator window)
-pytest RandezVousUITests/Tests/ios/suite_Quest_Activity/tst_Complete_Quest_From_Login/test.py --udid <simulator-udid> --headless
+pytest RandezVousUITests/tests/ios/suite_quest_activity/tst_complete_quest_from_login/test.py --udid <simulator-udid> --headless
 
 # Verbose + stop on first failure + show prints
 pytest -s -v --maxfail=1
@@ -62,7 +64,7 @@ Every test run auto-generates an HTML dashboard in `RandezVousUITests/reports/Ex
 
 ### conftest.py — shared fixtures (session root: `RandezVousUITests/`)
 
-- **`appium_server`** (session scope): kills anything already on `APPIUM_PORT`, launches `appium` as a subprocess (with `--allow-insecure uiautomator2:chromedriver_autodownload`, needed for `android_chrome_driver`'s `chromedriverAutodownload` capability to actually work), logs to `RandezVousUITests/Tests/logs/appium_server.log`.
+- **`appium_server`** (session scope): kills anything already on `APPIUM_PORT`, launches `appium` as a subprocess (with `--allow-insecure uiautomator2:chromedriver_autodownload`, needed for `android_chrome_driver`'s `chromedriverAutodownload` capability to actually work), logs to `RandezVousUITests/tests/logs/appium_server.log`.
 - **`firebase_init`** (session scope, autouse): initializes `firebase_admin` from `private/service-account-key-qa.json` (the `randezvous-qa` project; there is no `--env` switch and prod is never used). Fails the whole session immediately if the key is missing.
 - **`rv_driver`**: fresh Appium session against the RandezVous iOS app (`RV_BUNDLE_ID`), full reset each test. Default fixture for iOS tests.
 - **`rv_driver_no_reset`**: same but `noReset=True` — use when a test needs to preserve app state from a prior session.
@@ -89,7 +91,7 @@ Convention per helper class:
 
 ### Tests — `tests/{ios,web}/suite_<feature_area>/tst_<what_it_tests>/test.py`
 
-`tests/web/android/` groups the quest-onboarding suite (`suite_Quest_Onboarding_Access`) — the tests merged in with the Android emulator work. Only one of them uses the emulator (`android_chrome_driver`); the rest run in desktop Chrome/Safari or iOS Safari, so Android tests can be selected or skipped by path (`pytest RandezVousUITests/Tests/web/android`). It stays under `web/` because the web-server fixture keys off that path segment.
+`tests/web/android/` groups the quest-onboarding suite (`suite_Quest_Onboarding_Access`) — the tests merged in with the Android emulator work. Only one of them uses the emulator (`android_chrome_driver`); the rest run in desktop Chrome/Safari or iOS Safari, so Android tests can be selected or skipped by path (`pytest RandezVousUITests/tests/web/android`). It stays under `web/` because the web-server fixture keys off that path segment.
 
 One test function per file, named `test_<what_it_tests>`, taking a driver fixture as its argument. No setup/teardown logic in the test itself (lives in `conftest.py`). Conditional navigation (e.g. `if welcome.verify_welcome_modal_is_displayed(): ...`) is acceptable for screens that only appear on first launch or after specific state changes.
 

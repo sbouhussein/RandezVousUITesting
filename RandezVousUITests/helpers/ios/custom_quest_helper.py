@@ -290,7 +290,7 @@ class CustomQuestPage(BaseHelper):
 
     def complete_honor_based_activity(self, activity):
         self.click_activity(activity)
-        self.click_complete_quest_button()
+        self.open_quest_sheet()
         self.click_completed_activity_button()
         self.dismiss_rating_popup_if_present()
         self.click_back()
@@ -313,11 +313,16 @@ class CustomQuestPage(BaseHelper):
     def click_complete_quest_button(self):
         self.wait.until(EC.element_to_be_clickable(self.complete_quest_button)).click()
 
+    def open_quest_sheet(self):
+        """EligibleQuestOverlay auto-opens the sheet 1s after appearing for signed-in users at the
+        location; guests must tap the banner, and tapping it while auto-opened toggles it shut."""
+        if not self.is_visible(self.progress_sheet_label, custom_timeout=4):
+            self.click_complete_quest_button()
+            self.wait.until(EC.visibility_of_element_located(self.progress_sheet_label))
+
     def complete_location_activity(self, activity):
         self.click_activity(activity)
-        # EligibleQuestOverlay auto-opens the sheet 1s after appearing when at the location; tapping
-        # the banner toggles it and races that, so just wait for it.
-        self.wait.until(EC.visibility_of_element_located(self.progress_sheet_label))
+        self.open_quest_sheet()
         self.click(self.sheet_complete_quest_button)
         self.dismiss_rating_popup_if_present()
         self.click_back()
