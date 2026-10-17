@@ -3,6 +3,7 @@ import pytest
 from helpers.ios.custom_quest_helper import CustomQuestPage, QuestHelper
 from helpers.ios.login_page_helper import LoginPageHelper
 
+
 @pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
 def test_honor_based_activity(rv_driver):
     email = "oalson123@gmail.com"

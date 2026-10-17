@@ -2,6 +2,8 @@ from appium.webdriver.common.appiumby import AppiumBy
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+from helpers.ios.system_prompt_helper import SystemPromptHelper
+
 
 class LoginPageHelper:
     def __init__(self, driver):
@@ -74,8 +76,15 @@ class LoginPageHelper:
         if self.driver.is_keyboard_shown():
             self.driver.hide_keyboard()
 
-        # Sign-in is async; wait for the tab bar so callers don't tap the next tab mid-transition.
+        # iOS 27's "Save Password?" can appear just before or after the tab bar.
+        prompts = SystemPromptHelper(self.driver)
+        WebDriverWait(self.driver, 20).until(EC.any_of(
+            EC.presence_of_element_located(self.tab_bar),
+            EC.presence_of_element_located(prompts.save_password_dismiss_button)))
+        prompts.dismiss_save_password_prompt(timeout=5)
+        prompts.ensure_app_in_foreground()
         WebDriverWait(self.driver, 20).until(EC.presence_of_element_located(self.tab_bar))
+
 
 class WelcomeToQuestHelper:
     def __init__(self, driver):
@@ -83,9 +92,7 @@ class WelcomeToQuestHelper:
         self.wait = WebDriverWait(self.driver, 15)
 
     trophy_icon_image = (AppiumBy.ACCESSIBILITY_ID, "trophy.fill")
-    # The header reads "Welcome to {quest.title}!" -- title varies per quest
-    # (e.g. prod's "automation2" vs QA's "Test Automation Quest"), so match on
-    # a prefix instead of a specific quest's exact accessibility id.
+    # "Welcome to {quest.title}!" -- match the prefix since the title varies per quest.
     welcome_header_text = (AppiumBy.IOS_PREDICATE, "label BEGINSWITH 'Welcome to'")
     guest_onboarding_description_text = (AppiumBy.ACCESSIBILITY_ID,
                                          "Let's get you set up with a temporary guest profile so you can join the fun. You can create a full account later to save your progress.")

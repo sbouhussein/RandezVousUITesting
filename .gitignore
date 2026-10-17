@@ -24,3 +24,5 @@ private/
 
 # Reports
 reports/
+build/
+Build/

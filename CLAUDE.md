@@ -84,6 +84,7 @@ Convention per helper class:
 - Locators are **class-level attributes**, not set in `__init__`, so they're inspectable without instantiating.
 - `__init__` only sets `driver` / `wait`.
 - Methods are **actions only** — no `assert` inside helpers; assertions belong in the test file.
+- Comments are terse, one line if possible: state the non-obvious *why*, not the debugging history.
 - iOS: prefer `AppiumBy.IOS_CLASS_CHAIN` for elements without a unique Accessibility ID; `AppiumBy.XPATH` is last resort. When `.click()` is unreliable on overlapping XCUITest elements, use `driver.execute_script('mobile: tap', {'element': el.id, 'x': .., 'y': ..})`.
 
 ### Tests — `tests/{ios,web}/suite_<feature_area>/tst_<what_it_tests>/test.py`

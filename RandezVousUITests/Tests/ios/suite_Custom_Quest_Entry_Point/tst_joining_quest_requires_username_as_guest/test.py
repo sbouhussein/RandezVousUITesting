@@ -4,6 +4,7 @@ from helpers.ios.custom_quest_helper import QuestHelper
 from helpers.ios.login_page_helper import LoginPageHelper, WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
 from helpers.ios.sign_in_overlay_helper import DashboardOverlay
 
+
 @pytest.mark.cleanup(type="username", value="AutomatedTester")
 def test_joining_quest_requires_username_as_guest(rv_driver):
     """A guest (no account, no saved username) can't join a custom quest

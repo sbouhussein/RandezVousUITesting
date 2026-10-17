@@ -1,9 +1,9 @@
 import pytest
 
 from helpers.ios.custom_quest_helper import QuestHelper
-from helpers.ios.login_page_helper import WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
+from helpers.ios.login_page_helper import LoginPageHelper, WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
 from helpers.ios.sign_in_overlay_helper import DashboardOverlay
-from helpers.ios.login_page_helper import LoginPageHelper
+
 
 @pytest.mark.cleanup(type="username", value="AutomatedTester")
 def test_enter_custom_quest_on_dashboard(rv_driver):

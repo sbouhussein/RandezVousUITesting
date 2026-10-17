@@ -1,67 +1,57 @@
 import os
 
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from helpers.web.base_helper import BaseHelper
 
+
 class QuestHelper(BaseHelper):
-    def __init__(self, driver):
-        super().__init__(driver)
-        self.driver = driver
-        self.wait = WebDriverWait(self.driver, 10)
+    quest_code_input_locator = (By.ID, "quest-code")
+    find_quest_button_locator = (By.XPATH, "//button[@type='submit' and contains(text(), 'Find Quest')]")
 
-        self.quest_code_input_locator = (By.ID, "quest-code")
-        self.find_quest_button_locator = (By.XPATH, "//button[@type='submit' and contains(text(), 'Find Quest')]")
-        #Trivia
-        self.trivia_activity_locator = (By.XPATH, "//h4[normalize-space()='Trivia Activity']")
-        self.complete_trivia_button = (By.XPATH, "//button[@aria-label='Complete Trivia Activity']")
-        self.trivia_activity_locator = (By.XPATH, "//h4[normalize-space()='Trivia Activity']")
-        self.complete_trivia_button = (By.XPATH, "//button[@aria-label='Complete Trivia Activity']")
-        self.trivia_error_message = (By.XPATH, "//p[normalize-space()='Response is incorrect.']")
-        #Guest sign-in prompt shown when a signed-out visitor tries to complete an activity
-        self.sign_in_required_modal = (By.XPATH, "//*[normalize-space()='Sign in to complete this activity and track your points.']")
-        #Prompt
-        self.prompt_activity_locator = (By.XPATH, "//h4[normalize-space()='Prompt Activity']")
-        self.complete_prompt_button = (By.XPATH, "//button[@aria-label='Complete Prompt Activity']")
-        #Honor
-        self.honor_activity_locator = (By.XPATH, "//h4[normalize-space()='Honor Code Activity']")
-        self.complete_honor_button = (By.XPATH, "//button[@aria-label='Complete Honor Code Activity']")
-        self.honor_code_checkbox = (By.XPATH, "//label[contains(., 'honor code')]//input[@type='checkbox']")
-        #Photo
-        self.photo_activity_locator = (By.XPATH, "//h4[normalize-space()='Photo Activity']")
-        self.complete_photo_button = (By.XPATH, "//button[@aria-label='Complete Photo Activity']")
-        #Location
-        self.location_activity_locator = (By.XPATH, "//h4[normalize-space()='Location Activity']")
-        self.complete_location_button = (By.XPATH, "//button[@aria-label='Complete Location Activity']")
-        self.check_location_button = (By.XPATH, "//button[contains(., 'Check My Location')]")
-        self.location_error_message = (By.XPATH,
-                                  "//div[contains(@class, 'bg-red-50') and contains(., 'Location verification failed')]")
+    # Trivia
+    trivia_activity_locator = (By.XPATH, "//h4[normalize-space()='Trivia Activity']")
+    complete_trivia_button = (By.XPATH, "//button[@aria-label='Complete Trivia Activity']")
+    trivia_error_message = (By.XPATH, "//p[normalize-space()='Response is incorrect.']")
+    # Shown when a signed-out visitor tries to complete an activity
+    sign_in_required_modal = (By.XPATH, "//*[normalize-space()='Sign in to complete this activity and track your points.']")
 
-        self.text_box = (By.XPATH, "//textarea[@aria-label='Your response']")
-        self.complete_activity_button = (By.XPATH, "//button[normalize-space()='Complete Activity']")
-        self.prompt_activity_details_button = (By.XPATH, "//button[@aria-label='View details for Prompt Activity']")
-        self.activity_completed_indicator = (By.XPATH,"//div[contains(@class, 'bg-green-50') and normalize-space()='Activity Completed']")
-        self.quest_completed_message = (By.XPATH, "//p[normalize-space()='Congratulations on completing your quest!']")
+    # Prompt
+    prompt_activity_locator = (By.XPATH, "//h4[normalize-space()='Prompt Activity']")
+    complete_prompt_button = (By.XPATH, "//button[@aria-label='Complete Prompt Activity']")
+
+    # Honor
+    honor_activity_locator = (By.XPATH, "//h4[normalize-space()='Honor Code Activity']")
+    complete_honor_button = (By.XPATH, "//button[@aria-label='Complete Honor Code Activity']")
+    honor_code_checkbox = (By.XPATH, "//label[contains(., 'honor code')]//input[@type='checkbox']")
+
+    # Photo
+    photo_activity_locator = (By.XPATH, "//h4[normalize-space()='Photo Activity']")
+    complete_photo_button = (By.XPATH, "//button[@aria-label='Complete Photo Activity']")
+    file_input = (By.XPATH, "//input[@type='file']")
+
+    # Location
+    location_activity_locator = (By.XPATH, "//h4[normalize-space()='Location Activity']")
+    complete_location_button = (By.XPATH, "//button[@aria-label='Complete Location Activity']")
+    check_location_button = (By.XPATH, "//button[contains(., 'Check My Location')]")
+    location_error_message = (By.XPATH,
+                              "//div[contains(@class, 'bg-red-50') and contains(., 'Location verification failed')]")
+
+    text_box = (By.XPATH, "//textarea[@aria-label='Your response']")
+    complete_activity_button = (By.XPATH, "//button[normalize-space()='Complete Activity']")
+    prompt_activity_details_button = (By.XPATH, "//button[@aria-label='View details for Prompt Activity']")
+    activity_completed_indicator = (By.XPATH, "//div[contains(@class, 'bg-green-50') and normalize-space()='Activity Completed']")
+    quest_completed_message = (By.XPATH, "//p[normalize-space()='Congratulations on completing your quest!']")
 
     def enter_quest_code(self, code):
-        """Waits for the input field to be clickable, clears it, and types the code."""
         print("Entering quest code")
         input_field = self.wait.until(EC.element_to_be_clickable(self.quest_code_input_locator))
         input_field.clear()
         input_field.send_keys(code)
 
     def click_find_quest(self):
-        """Waits for the Find Quest submit button to be clickable, then clicks it."""
         print("Clicking Find Quest button...")
-        self.is_find_quest_button_enabled()
-        button = self.wait.until(EC.element_to_be_clickable(self.find_quest_button_locator))
-        button.click()
-
-    def is_find_quest_button_enabled(self):
-        """Checks if the button is enabled (useful since it starts disabled)."""
-        button = self.wait.until(EC.visibility_of_element_located(self.find_quest_button_locator))
-        return button.is_enabled()
+        self.wait.until(EC.element_to_be_clickable(self.find_quest_button_locator)).click()
 
     def open_trivia_complete_form(self):
         """Expands the Trivia accordion and presses its Complete button (for a signed-out
@@ -106,7 +96,6 @@ class QuestHelper(BaseHelper):
         self.click(self.complete_activity_button)
 
     def upload_photo(self, file_name="test_image.jpg"):
-
         helper_dir = os.path.dirname(os.path.abspath(__file__))
         photo_path = os.path.join(helper_dir, file_name)
 
@@ -114,23 +103,23 @@ class QuestHelper(BaseHelper):
             raise FileNotFoundError(f"Test image not found in helper directory at: {photo_path}")
 
         print(f"Uploading file from: {photo_path}")
-        file_input = self.driver.find_element(By.XPATH, "//input[@type='file']")
-        file_input.send_keys(photo_path)
+        self.driver.find_element(*self.file_input).send_keys(photo_path)
 
-    def complete_location_activity(self, fail_check = False):
-        print("click and complete location activity")
+    def check_location(self):
+        """Opens the Location activity and runs its location check, without completing it."""
         self.click(self.location_activity_locator)
         self.click(self.complete_location_button)
         self.click(self.check_location_button)
 
-        if fail_check:
-            print("Fail check")
-            assert self.is_visible(self.location_error_message, custom_timeout=3)
+    def complete_location_activity(self):
+        print("click and complete location activity")
+        self.check_location()
+        self.click(self.complete_activity_button)
 
-        else:
-            self.click(self.complete_activity_button)
+    def is_location_error_visible(self):
+        return self.is_visible(self.location_error_message, custom_timeout=3)
 
-    def mock_geo_location(self, dv, lat, long):
+    def mock_geo_location(self, lat, long):
         mock_location_js = f"""
             const mockPosition = {{
                 coords: {{
@@ -151,35 +140,25 @@ class QuestHelper(BaseHelper):
 
             window.navigator.geolocation.watchPosition = function(success, error, options) {{
                 success(mockPosition);
-                return 999; // Mock watch ID
+                return 999;
             }};
             """
+        self.driver.execute_script(mock_location_js)
 
-        dv.execute_script(mock_location_js)
-
-        print("Checking what Safari thinks its location is...")
-        dv.set_script_timeout(5)
-
+        self.driver.set_script_timeout(5)
         check_location_js = """
-            // Selenium automatically provides a callback function as the last argument
-            var seleniumCallback = arguments[arguments.length - 1]; 
-
+            var done = arguments[arguments.length - 1];
             window.navigator.geolocation.getCurrentPosition(
                 function(position) {
-                    // Return the coordinates to Python
-                    seleniumCallback({ 
-                        lat: position.coords.latitude, 
-                        lng: position.coords.longitude 
-                    });
-                }, 
+                    done({ lat: position.coords.latitude, lng: position.coords.longitude });
+                },
                 function(error) {
-                    seleniumCallback({ error: error.message });
+                    done({ error: error.message });
                 }
             );
             """
-
-        reported_location = dv.execute_async_script(check_location_js)
-        print(f"Safari reported its location to the app as: {reported_location}")
+        reported_location = self.driver.execute_async_script(check_location_js)
+        print(f"Browser reports its location as: {reported_location}")
 
     def complete_quest(self, trivia_response, prompt_response):
         self.complete_trivia_activity(trivia_response)
@@ -200,9 +179,8 @@ class QuestHelper(BaseHelper):
         self.click(dynamic_locator)
         print("Verifying Activity Completion")
         result = self.is_visible(self.activity_completed_indicator, custom_timeout=3)
-        # "View details" navigates to its own sub-route; go back to the base
-        # quest page for whatever's checked next. Best-effort: if this was
-        # the quest's last activity, the completion screen may cover it.
+        # "View details" is its own sub-route; go back for whatever's checked next. Best-effort:
+        # after the quest's last activity the completion screen may cover the page.
         self.driver.back()
         self.is_visible(dynamic_locator, custom_timeout=5)
         return result

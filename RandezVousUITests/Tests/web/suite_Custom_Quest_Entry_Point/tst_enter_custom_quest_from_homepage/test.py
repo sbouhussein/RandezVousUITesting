@@ -3,24 +3,21 @@ import pytest
 
 from helpers.web.homepage_helper import HomepageHelper
 from helpers.web.quest_helper import QuestHelper
-from helpers.web.quest_test_data import ACTIVITY_QUEST_ID, BASE_URL
+from helpers.web.quest_test_data import ACTIVITY_QUEST_ID, BASE_URL, TEST_USER_EMAIL, TEST_USER_PASSWORD
 
-@pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
+
+@pytest.mark.cleanup(type="email", value=TEST_USER_EMAIL)
 def test_enter_custom_quest_from_homepage(desktop_safari_driver):
     desktop_safari_driver.get(BASE_URL)
-    email = "oalson123@gmail.com"
-    password = "OmarTest123"
-    quest_code = ACTIVITY_QUEST_ID
-    response = "Trivia"
 
     nav = HomepageHelper(desktop_safari_driver)
     quest = QuestHelper(desktop_safari_driver)
 
     time.sleep(2)
-    nav.login(email, password)
+    nav.login(TEST_USER_EMAIL, TEST_USER_PASSWORD)
     nav.click_find_quest()
-    quest.enter_quest_code(quest_code)
+    quest.enter_quest_code(ACTIVITY_QUEST_ID)
     quest.click_find_quest()
-    quest.complete_trivia_activity(response)
+    quest.complete_trivia_activity("Trivia")
     time.sleep(10)
 
