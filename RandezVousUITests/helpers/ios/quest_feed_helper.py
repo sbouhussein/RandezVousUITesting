@@ -37,7 +37,7 @@ class QuestFeedHelper:
     def add_comment(self, text):
         field = self.wait.until(EC.presence_of_element_located(self.comment_field))
         field.send_keys(text)
-        # Note: XML shows send button is 'enabled="false"' until text is entered
+        # The send button stays disabled until text is entered.
         self.wait.until(EC.element_to_be_clickable(self.send_comment_button)).click()
 
     def get_latest_post_date(self):

@@ -2,18 +2,11 @@ from firebase_admin import auth, firestore
 
 
 def _clear_quest_residue(db, uid):
-    """Deletes quest-participation residue for this uid: the QuestHist and
-    questGrants subcollection docs, plus any Organizations/{orgId}/leaders/{uid}
-    leaderboard entry, across every org. These are test-run byproducts of
-    joining/completing quests, not user profile data -- nothing here touches
-    username, email, icon, or anything else on the Users/{uid} doc itself.
+    """Deletes the uid's QuestHist and questGrants subcollection docs and its leaderboard entry in
+    every org. Leaves the Users/{uid} doc itself alone.
 
-    A stale doc in either subcollection is what caused the join-race bug we
-    hit earlier: /api/quest/join is idempotent on an existing questGrants
-    doc, so a leftover grant from a prior run makes a test's own "join" a
-    no-op that never rewrites questHist, silently breaking any assertion
-    that depends on a fresh join having happened.
-    """
+    /api/quest/join is a no-op on an existing questGrants doc, so a leftover grant would stop a
+    test's join from rewriting questHist."""
     user_ref = db.collection("Users").document(uid)
     for subcollection in ("QuestHist", "questGrants"):
         for doc in user_ref.collection(subcollection).stream():

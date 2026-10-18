@@ -1,32 +1,18 @@
 import pytest
-import time
-
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 
 from helpers.web.homepage_helper import HomepageHelper
 from helpers.web.quest_helper import QuestHelper
-from helpers.web.quest_test_data import ACTIVITY_QUEST_ID
+from helpers.web.quest_test_data import ACTIVITY_QUEST_ID, TEST_USER_EMAIL, TEST_USER_PASSWORD
 
 
-@pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
+@pytest.mark.cleanup(type="email", value=TEST_USER_EMAIL)
 def test_fail_to_complete_trivia_activity(desktop_safari_driver):
-
-    email = "oalson123@gmail.com"
-    password = "OmarTest123"
-    quest_code = ACTIVITY_QUEST_ID
-    response = "Triviq"
-
     nav = HomepageHelper(desktop_safari_driver)
     quest = QuestHelper(desktop_safari_driver)
 
-    print("Signing in")
-    nav.login(email, password)
-    nav.find_quest(quest_code)
+    nav.login(TEST_USER_EMAIL, TEST_USER_PASSWORD)
+    nav.find_quest(ACTIVITY_QUEST_ID)
 
-    print("Completing trivia activity")
-    quest.complete_trivia_activity(response)
+    quest.complete_trivia_activity("Triviq")
 
-    print("Verifying the UI displays an 'Incorrect Answer' warning...")
-    assert quest.is_trivia_error_visible() == True, "The trivia error message did not appear!"
+    assert quest.is_trivia_error_visible(), "The trivia error message did not appear!"

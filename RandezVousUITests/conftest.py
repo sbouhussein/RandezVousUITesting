@@ -3,28 +3,27 @@ import os
 import re
 import shutil
 import signal
-import time
+import socket
 import subprocess
+import time
+from pathlib import Path
+
 import firebase_admin
 import pytest
 import requests
+from appium import webdriver as appium_webdriver
 from appium.options.common import AppiumOptions
 from dotenv import load_dotenv
 from firebase_admin import credentials
-from pathlib import Path
-
-from selenium.common import InvalidSessionIdException, TimeoutException
 from selenium import webdriver
-from appium import webdriver as appium_webdriver
-from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.common import InvalidSessionIdException, TimeoutException
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.wait import WebDriverWait
 
+from helpers.ios.device_helper import DEFAULT_SIM_LOCATION
 from helpers.ios.firebase_cleanup_helper import cleanup_user_data
 from helpers.web import quest_test_data
 from helpers.web.homepage_helper import HomepageHelper
-import socket
-import subprocess
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
@@ -39,6 +38,8 @@ ANDROID_PLATFORM_VERSION = os.getenv("ANDROID_PLATFORM_VERSION", "14")
 APP_CHECK_DEBUG_TOKEN = os.getenv("FIREBASE_APP_CHECK_DEBUG_TOKEN")
 WEB_APP_PATH = os.getenv("WEB_APP_PATH", "../../RandezVousSite/rvsite")
 REPORT_RETENTION_COUNT = int(os.getenv("REPORT_RETENTION_COUNT", "20"))
+LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Tests", "logs")
+
 
 def pytest_addoption(parser):
     parser.addoption("--udid", action="store", default="booted", help="UDID of the iOS Simulator")
@@ -46,10 +47,10 @@ def pytest_addoption(parser):
     parser.addoption("--browser", action="store", default="safari", choices=["safari", "chrome", "firefox"],
                       help="Desktop browser for web tests (Safari has no headless mode)")
 
+
 def _quit_driver_safely(driver):
-    """Close every window, then quit -- each step best-effort so one failure can't leave the
-    browser (and its tabs) open. Safari leaves its automation windows behind if the session
-    isn't ended cleanly."""
+    """Closes every window, then quits. Each step is best-effort so one failure can't leave the
+    browser open."""
     try:
         for handle in list(driver.window_handles):
             driver.switch_to.window(handle)
@@ -71,10 +72,9 @@ def _safari_automation_pids():
 
 
 def _end_safari_automation(pids, grace=3.0, term_wait=5.0):
-    """driver.quit() ends the WebDriver session but leaves its `Safari --automation` process
-    running indefinitely; the next session then fails with "Safari instance is already paired
-    with a different session". Give `pids` (this session's own process) a moment to exit by
-    itself, then SIGTERM, then SIGKILL. Never touches any other Safari process."""
+    """driver.quit() leaves the session's `Safari --automation` process running, and the next
+    session then fails with "already paired with a different session". Waits for `pids` to exit,
+    then SIGTERMs, then SIGKILLs them."""
     def alive(pid):
         try:
             os.kill(pid, 0)
@@ -103,30 +103,16 @@ def _end_safari_automation(pids, grace=3.0, term_wait=5.0):
 
 
 def _sweep_leaked_safari_windows():
-    """Ends orphaned Safari automation sessions (left by killed or crashed runs, which skip fixture
-    teardown). Each safaridriver session is its own `Safari --automation` process -- a leaked one
-    keeps a whole Safari instance and its tabs alive -- so kill exactly those. The user's own
-    Safari is a different process without --automation and is never touched."""
+    """Kills Safari automation sessions orphaned by killed or crashed runs (which skip fixture
+    teardown). The user's own Safari runs without --automation and is never touched."""
     subprocess.run(["pkill", "-x", "safaridriver"], capture_output=True)
-    subprocess.run(["pkill", "-f", "Safari.app/Contents/MacOS/Safari --automation"], capture_output=True)
+    subprocess.run(["pkill", "-f", _SAFARI_AUTOMATION_PATTERN], capture_output=True)
 
-
-def _web_target(request):
-    """(npm script, port) for rvsite's dev servers. `npm start` is rvsite's QA target:
-    Vite --mode qa on 5174 plus the backend on 3000 (backend/.env.qa), both against
-    randezvous-qa -- the same project firebase_init and the seeded fixtures use. Never
-    `start:prod`: web tests must not touch the prod Firebase project."""
-    return "start", quest_test_data.WEB_PORT
 
 def is_port_in_use(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('localhost', int(port))) == 0
 
-def _require_env(name: str) -> str:
-    value = os.getenv(name)
-    if not value:
-        raise EnvironmentError(f"Required environment variable '{name}' is not set. See .env.example.")
-    return value
 
 @pytest.fixture(scope="session")
 def appium_server():
@@ -140,15 +126,12 @@ def appium_server():
             subprocess.run(["kill", "-9", *pids])
         time.sleep(2)
 
-    log_dir = os.path.join(os.path.dirname(__file__), "RandezVousUITests/Tests/logs")
-    os.makedirs(log_dir, exist_ok=True)
-    log_fd = open(os.path.join(log_dir, "appium_server.log"), "w")
+    os.makedirs(LOG_DIR, exist_ok=True)
+    log_fd = open(os.path.join(LOG_DIR, "appium_server.log"), "w")
 
     appium_env = os.environ.copy()
-    # The UiAutomator2 driver needs ANDROID_HOME/ANDROID_SDK_ROOT set on the Appium
-    # *server* process itself -- adb being on PATH isn't enough. Default to Android
-    # Studio's standard macOS install location so android_chrome_driver works without
-    # every machine needing its own shell profile edit.
+    # UiAutomator2 needs ANDROID_HOME on the Appium server process itself (adb on PATH isn't
+    # enough), so default it to Android Studio's standard macOS install location.
     if "ANDROID_HOME" not in appium_env and "ANDROID_SDK_ROOT" not in appium_env:
         default_sdk = os.path.expanduser("~/Library/Android/sdk")
         if os.path.isdir(default_sdk):
@@ -156,12 +139,8 @@ def appium_server():
             appium_env["ANDROID_SDK_ROOT"] = default_sdk
 
     process = subprocess.Popen(
-        # --allow-insecure uiautomator2:chromedriver_autodownload: chromedriver
-        # auto-download is an "insecure feature" Appium disables by default -- without
-        # this flag, the appium:chromedriverAutodownload capability (android_chrome_driver)
-        # is silently ignored and Chrome sessions fail with "No Chromedriver found".
-        # Appium 3.x requires the driver name (or '*') prefix -- the bare feature name
-        # is rejected at startup ("must include ... automation name or the '*' wildcard").
+        # Without this, android_chrome_driver's chromedriverAutodownload capability is silently
+        # ignored ("No Chromedriver found"). Appium 3 requires the "uiautomator2:" prefix.
         ["appium", "--port", APPIUM_PORT, "--log-level", "info",
          "--allow-insecure", "uiautomator2:chromedriver_autodownload"],
         stdout=log_fd,
@@ -186,12 +165,8 @@ def appium_server():
 
 @pytest.fixture(scope="session")
 def seed_simulator_photos(request):
-    """Ensures the simulator's Photos library has at least one image, once
-    per session. complete_photo_activity()'s picker step depends on a real
-    photo existing -- previously it relied on whatever screenshots happened
-    to already be in the camera roll on someone's machine. simctl addmedia
-    is idempotent to call repeatedly (just adds another photo), so this is
-    safe to run every session regardless of what's already there."""
+    """Adds a photo to the simulator's library once per session, for complete_photo_activity()'s
+    picker step."""
     target_udid = request.config.getoption("--udid")
     sample_photo = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "sample_photo.png")
     subprocess.run(
@@ -201,7 +176,7 @@ def seed_simulator_photos(request):
     yield
 
 
-def _build_options(bundle_id, udid, no_reset=False, is_headless=False):
+def _build_options(bundle_id, udid, no_reset=False, is_headless=False, show_quest_intro=False):
     options = AppiumOptions()
     options.set_capability("platformName", "iOS")
     options.set_capability("appium:automationName", "XCUITest")
@@ -225,19 +200,17 @@ def _build_options(bundle_id, udid, no_reset=False, is_headless=False):
     options.set_capability("appium:appPushTimeout", 60000)
     options.set_capability("appium:waitForIdleTimeout", 500)
 
+    # Skips the Quests onboarding overlay; must be "<false/>" since "NO" parses as a string.
+    process_arguments = {"args": [] if show_quest_intro else ["-showQuestIntro", "<false/>"]}
     if APP_CHECK_DEBUG_TOKEN:
-        # Pins App Check's debug provider to a token pre-registered in Firebase Console.
-        options.set_capability("appium:processArguments", {
-            "env": {"FIRAAppCheckDebugToken": APP_CHECK_DEBUG_TOKEN}
-        })
+        # Debug token pre-registered in Firebase Console.
+        process_arguments["env"] = {"FIRAAppCheckDebugToken": APP_CHECK_DEBUG_TOKEN}
+    options.set_capability("appium:processArguments", process_arguments)
 
     return options
 
 
-# Lines worth surfacing straight into the test's own captured output --
-# network-level evidence for auth/App Check failures (status codes, the
-# request URL, and any server error body) without having to go dig through
-# the saved log file by hand.
+# Device log lines echoed into the test's output: evidence for auth/App Check failures.
 _NETWORK_LOG_PATTERN = re.compile(
     r"CFNetwork|cloudfunctions|\.run\.app|firebaseappcheck|googleapis\.com|"
     r"AppCheck|Unauthenticated|Must be signed in|status \d{3}|response_status=\d+",
@@ -247,31 +220,20 @@ _NETWORK_LOG_PATTERN = re.compile(
 
 @pytest.fixture
 def ios_device_log(request):
-    """Pulls the simulator's console log (os_log) covering an iOS test's
-    duration, filtered to the RandezVous process -- this is where CFNetwork
-    request/response status lines live, useful for telling an App Check
-    rejection apart from a Cloud Function's own auth check (both surface as
-    the same generic "Unauthenticated" error client-side -- see memory:
-    project_qa_unauthenticated_join).
+    """Saves the RandezVous process's simulator console log for the test's duration to
+    Tests/logs/device_console/<test_name>.log and echoes the network-relevant lines. That's where
+    an App Check rejection can be told apart from a Cloud Function's own auth check (both surface
+    client-side as "Unauthenticated").
 
-    Uses `log show --last <Ns>` *after* the test finishes rather than a live
-    `log stream` -- streaming proved unreliable (attached too late or not at
-    all); `--last` reads back from the persisted log and has been verified
-    to reliably return matching entries. `--start <timestamp>` was tried
-    first and silently returned zero rows because `log show` interprets
-    --start as local time -- a UTC-computed timestamp pointed hours off.
-
-    Saved regardless of pass/fail to Tests/logs/device_console/<test_name>.log;
-    network-relevant lines are also echoed into this test's own captured
-    output so they show up directly in a PyCharm/CLI run without opening a
-    separate file."""
+    Reads back with `log show --last` after the test: a live `log stream` attached unreliably, and
+    `--start` is interpreted as local time."""
     target_udid = request.config.getoption("--udid")
     start = time.time()
 
     yield
 
     elapsed_seconds = int(time.time() - start) + 5  # small buffer for log-write lag
-    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Tests", "logs", "device_console")
+    log_dir = os.path.join(LOG_DIR, "device_console")
     os.makedirs(log_dir, exist_ok=True)
     safe_name = re.sub(r"[^\w.-]", "_", request.node.name)
     log_path = os.path.join(log_dir, f"{safe_name}.log")
@@ -303,13 +265,15 @@ def rv_driver(request, appium_server, ios_device_log, seed_simulator_photos):
     target_udid = request.config.getoption("--udid")
     target_headless = request.config.getoption("--headless")
 
-    # Simulated location persists on the simulator after a test ends. The
-    # out-of-range location tests leave it far from every quest, and the next
-    # test then fails at Quests-tab navigation -- so start each test clean.
-    subprocess.run(["xcrun", "simctl", "location", target_udid, "clear"], capture_output=True)
-    time.sleep(3)  # locationd needs a moment to apply the clear before the app launches
+    # Pin, don't clear: no location fix makes the app raise an alert autoAcceptAlerts sends to Settings.
+    lat, lon = DEFAULT_SIM_LOCATION
+    subprocess.run(["xcrun", "simctl", "location", target_udid, "set", f"{lat},{lon}"], capture_output=True)
+    # iOS 27 silently ignores a "location" grant but honors "location-always".
+    for service in ("location", "location-always"):
+        subprocess.run(["xcrun", "simctl", "privacy", target_udid, "grant", service, RV_BUNDLE_ID],
+                       capture_output=True)
+    time.sleep(3)  # locationd applies the location asynchronously
 
-    # Pass the extracted UDID into your options builder
     driver = appium_webdriver.Remote(
         APPIUM_SERVER_URL,
         options=_build_options(RV_BUNDLE_ID, udid=target_udid, is_headless=target_headless)
@@ -332,10 +296,7 @@ def _build_desktop_driver(browser, headless):
     if browser == "chrome":
         options = webdriver.ChromeOptions()
         if headless:
-            # maximize_window() has no real screen to expand to headless, so
-            # it leaves Chrome at its small default viewport (~800x600),
-            # which triggers a different responsive layout than every other
-            # mode runs against -- pin a real desktop size instead.
+            # Headless has no screen to maximize to; pin a desktop size so the layout matches.
             options.add_argument("--headless=new")
             options.add_argument("--window-size=1920,1080")
         return webdriver.Chrome(options=options)
@@ -349,12 +310,8 @@ def _build_desktop_driver(browser, headless):
     raise ValueError(f"Unknown browser: {browser}")
 
 
-# rvsite's detectPlatform() (src/utils/platformUtils.js) reads navigator.userAgent,
-# which Selenium can only override on Chrome -- Safari/Firefox don't expose a
-# capability for it. Android is used (not iOS) because QuestOnboarding's
-# AppActionCard puts the fallback URL we test directly in the "Open in App"
-# link's href only on Android; iOS uses the raw custom-scheme deep link there
-# instead and only consults the fallback URL inside a blur-timeout callback.
+# rvsite's detectPlatform() reads navigator.userAgent, which only Chrome lets Selenium override.
+# Android rather than iOS because only on Android does the "Open in App" href hold the fallback URL.
 MOBILE_ANDROID_USER_AGENT = (
     "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
@@ -363,10 +320,8 @@ MOBILE_ANDROID_USER_AGENT = (
 
 @pytest.fixture
 def mobile_chrome_driver(request):
-    """Chrome pinned to a mobile user-agent, so rvsite treats it as a phone
-    browser (QuestOnboarding's AppActionCard) instead of desktop. Unlike
-    desktop_safari_driver, doesn't wait for a login form on load -- tests
-    using this fixture navigate straight to a quest URL, signed in or not."""
+    """Chrome with an Android user-agent, so rvsite renders its phone layout. Doesn't wait for
+    hydration like desktop_safari_driver: tests navigate straight to a quest URL."""
     headless = request.config.getoption("--headless")
     options = webdriver.ChromeOptions()
     options.add_argument(f"--user-agent={MOBILE_ANDROID_USER_AGENT}")
@@ -389,30 +344,21 @@ def mobile_chrome_driver(request):
 
 @pytest.fixture
 def desktop_safari_driver(request):
-    """Launches the desktop browser selected via --browser (default: safari).
-    Selenium Manager auto-provisions chromedriver/geckodriver -- Chrome or
-    Firefox just need to be installed."""
+    """The desktop browser selected via --browser (default: safari), on rvsite's landing page."""
     browser = request.config.getoption("--browser")
     headless = request.config.getoption("--headless")
     safari_pids_before = _safari_automation_pids() if browser == "safari" else set()
     driver = _build_desktop_driver(browser, headless)
-    # The Safari process this session just started (diffed against what already existed).
     safari_session_pids = (_safari_automation_pids() - safari_pids_before) if browser == "safari" else set()
     try:
         if headless:
-            # maximize_window() has no real screen to expand to headless and can
-            # override the --window-size startup arg with something tiny --
-            # the fixed size set at launch is already what we want.
             driver.set_window_size(1920, 1080)
         else:
             driver.maximize_window()
 
-        # 2. Perform the initial navigation
-        _, web_port = _web_target(request)
-        print(f"\nNavigating to http://localhost:{web_port}")
-        driver.get(f"http://localhost:{web_port}")
+        print(f"\nNavigating to {quest_test_data.BASE_URL}")
+        driver.get(quest_test_data.BASE_URL)
 
-        # 3. Wait for the base HTML to load
         wait = WebDriverWait(driver, 10)
         wait.until(lambda d: d.execute_script("return document.readyState") == "complete")
 
@@ -420,30 +366,29 @@ def desktop_safari_driver(request):
         driver.execute_script("window.sessionStorage.clear();")
         driver.refresh()
 
-        # 4. Wait for React to hydrate. The root route is the marketing landing page (its only
-        #    email input is a hidden "Work Email" lead field), so a visible header "Login" link or a
-        #    visible email input (when a test lands on /login) is the hydration signal, not the
-        #    first email input in the DOM.
+        # The landing page's only email input is a hidden lead field, so wait for a *visible*
+        # "Login" link or email input as the hydration signal.
         wait_for_react = WebDriverWait(driver, 30)
         print("Waiting for React to hydrate...")
         wait_for_react.until(lambda d: any(
             e.is_displayed() for e in d.find_elements(
                 By.XPATH, "//a[normalize-space()='Login'] | //input[@type='email']")))
 
-        # 5. Hand the ready-to-use driver over to the test
         yield driver
-
     finally:
-        # Runs even if setup/hydration raised before the yield -- otherwise the browser
-        # (and its tabs) leaked, which is how Safari instances piled up.
         _quit_driver_safely(driver)
         if safari_session_pids:
             _end_safari_automation(safari_session_pids)
             print(f"Safari automation processes left after teardown: {len(_safari_automation_pids())}")
 
+
 @pytest.fixture
-def rv_driver_no_reset(appium_server, ios_device_log, seed_simulator_photos):
-    driver = webdriver.Remote(APPIUM_SERVER_URL, options=_build_options(RV_BUNDLE_ID, no_reset=True))
+def rv_driver_no_reset(request, appium_server, ios_device_log, seed_simulator_photos):
+    target_udid = request.config.getoption("--udid")
+    driver = appium_webdriver.Remote(
+        APPIUM_SERVER_URL,
+        options=_build_options(RV_BUNDLE_ID, target_udid, no_reset=True)
+    )
     yield driver
     driver.quit()
 
@@ -453,9 +398,7 @@ def safari_driver(request, appium_server):
     target_udid = request.config.getoption("--udid")
     target_headless = request.config.getoption("--headless")
 
-    # appium_webdriver.Remote (not plain selenium.webdriver.Remote) -- hybrid/webview
-    # interaction needs the .contexts / switch_to.context() extensions it adds; see
-    # BaseHelper.switch_to_webview.
+    # Appium's Remote, not Selenium's: BaseHelper.switch_to_webview needs .contexts.
     driver = appium_webdriver.Remote(
         APPIUM_SERVER_URL,
         options=_build_options(SAFARI_BUNDLE_ID, target_udid, is_headless=target_headless)
@@ -470,10 +413,7 @@ def safari_driver(request, appium_server):
 
 
 def _adb_path():
-    """adb from PATH if present, else the Android SDK's platform-tools (the standard
-    macOS location, or ANDROID_HOME/ANDROID_SDK_ROOT) -- so a fresh clone that ran
-    setup.sh works without editing a shell profile, same as appium_server's
-    ANDROID_HOME default."""
+    """adb from PATH, else from the Android SDK's platform-tools."""
     on_path = shutil.which("adb")
     if on_path:
         return on_path
@@ -519,10 +459,7 @@ def _get_android_serial():
 
 
 def _adb_reverse_web_ports(serial, remove=False):
-    """Android emulators treat 'localhost' as themselves, not the host machine -- forward
-    the emulator's loopback ports to the host's Vite/backend servers so BASE_URL
-    (quest_test_data.BASE_URL) resolves the same as every other web
-    driver."""
+    """Forwards the emulator's localhost ports to the host's dev servers, so BASE_URL works there."""
     if remove:
         subprocess.run([_adb_path(), "-s", serial, "reverse", "--remove-all"], capture_output=True)
         return
@@ -538,8 +475,6 @@ def _build_android_chrome_options(serial):
     options.set_capability("appium:platformVersion", ANDROID_PLATFORM_VERSION)
     options.set_capability("appium:udid", serial)
     options.set_capability("browserName", "Chrome")
-    # Auto-fetches the chromedriver build matching the emulator image's system Chrome --
-    # avoids hand-pinning a chromedriver version per AVD.
     options.set_capability("appium:chromedriverAutodownload", True)
     options.set_capability("appium:newCommandTimeout", 120)
     return options
@@ -547,18 +482,8 @@ def _build_android_chrome_options(serial):
 
 @pytest.fixture
 def android_chrome_driver(appium_server):
-    """Real mobile Chrome on an Android emulator/device via Appium's UiAutomator2 driver --
-    the Android counterpart to safari_driver. Unlike mobile_chrome_driver's user-agent
-    trick on desktop Chrome, this is an actual Android browser, so it exercises real
-    intent-link resolution for QuestOnboarding's "Open in App" behavior. RV's TWA
-    (com.randezvous.RandezVous, live on Google Play -- see
-    rvsite/public/.well-known/assetlinks.json) could later be driven directly by swapping
-    the browserName capability for appPackage/appActivity.
-
-    appium_webdriver.Remote (not plain selenium.webdriver.Remote) -- hybrid/webview
-    interaction needs the .contexts / switch_to.context() extensions it adds; see
-    BaseHelper.switch_to_webview.
-    """
+    """Real Chrome on an Android emulator/device, the Android counterpart to safari_driver. Unlike
+    mobile_chrome_driver, it exercises real intent-link resolution."""
     serial = _get_android_serial()
     _adb_reverse_web_ports(serial)
 
@@ -578,27 +503,18 @@ def android_chrome_driver(appium_server):
 
 @pytest.fixture(scope="session", autouse=True)
 def firebase_init():
-    """Initializes Firebase using the verified absolute path. Always points
-    at randezvous-qa (service-account-key-qa.json, matching rvsite's own
-    QA key naming) -- prod is never used by this suite."""
-    key_filename = "service-account-key-qa.json"
-
-    project_root = Path(__file__).parent.parent.resolve()
-    key_path = project_root / "private" / key_filename
-
-    print(f"Checking key at absolute path: {key_path.resolve()}")
+    """Initializes the Admin SDK against randezvous-qa. Prod is never used by this suite."""
+    key_path = Path(__file__).parent.parent.resolve() / "private" / "service-account-key-qa.json"
     if not key_path.exists():
-        pytest.exit(
-            f"ABSOLUTE PATH FAIL: \nTried: {key_path.resolve()}"
-        )
+        pytest.exit(f"Firebase service account key not found at {key_path}")
 
     if not firebase_admin._apps:
-        cred = credentials.Certificate(str(key_path))
-        firebase_admin.initialize_app(cred)
+        firebase_admin.initialize_app(credentials.Certificate(str(key_path)))
+
 
 @pytest.fixture(autouse=True)
 def setup_teardown(request):
-    """SETUP: Runs before every test """
+    """Wipes test-user data named by the test's @pytest.mark.cleanup marker before it runs."""
     marker = request.node.get_closest_marker("cleanup")
     if marker:
         cleanup_type = marker.kwargs.get("type")
@@ -606,13 +522,12 @@ def setup_teardown(request):
         score = marker.kwargs.get("score")
 
         if cleanup_type == "username":
-            cleanup_user_data(target_username = identifier, target_score = score)
+            cleanup_user_data(target_username=identifier, target_score=score)
         elif cleanup_type == "email":
-            cleanup_user_data(target_email = identifier, target_score = score)
+            cleanup_user_data(target_email=identifier, target_score=score)
 
-html_results = []
 
-# Global storage to aggregate logs, statuses, and steps across ALL test phases
+# Per-test results aggregated across setup/call/teardown, for the HTML report.
 _compiled_test_results = {}
 
 _DRIVER_FIXTURE_NAMES = (
@@ -635,16 +550,17 @@ def _get_active_driver(item):
 
 
 def _platform_for_nodeid(nodeid):
-    if "/tests/ios/" in nodeid or "\\tests\\ios\\" in nodeid:
+    nodeid = nodeid.lower()
+    if "tests/ios/" in nodeid:
         return "iOS"
-    if "/tests/web/" in nodeid or "\\tests\\web\\" in nodeid:
+    if "tests/web/" in nodeid:
         return "Web"
     return "Other"
 
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
-    """Captures test results, aggregated logs, and screenshots across all phases"""
+    """Captures each test's result, output, and end-state screenshot for the HTML report."""
     outcome = yield
     report = outcome.get_result()
 
@@ -678,17 +594,14 @@ def pytest_runtest_makereport(item, call):
         if call.excinfo:
             test_entry["error_msg"] = str(call.excinfo.value)
             try:
-                # Walk backwards through the stacktrace to find the first frame in our own code
+                # Innermost frame in our own code, skipping the stdlib and installed packages.
                 target_frame = None
                 for frame in reversed(call.excinfo.traceback):
                     frame_path = str(frame.path)
-
-                    # Ignore standard library and virtual environment folders
                     if "site-packages" not in frame_path and ".venv" not in frame_path and "lib/python" not in frame_path:
                         target_frame = frame
                         break
 
-                # Fallback to the absolute last frame if everything was library code
                 if not target_frame:
                     target_frame = call.excinfo.traceback[-1]
 
@@ -700,9 +613,7 @@ def pytest_runtest_makereport(item, call):
             except Exception:
                 test_entry["failure_line"] = "Could not parse the exact line of failure."
 
-    # Capture a screenshot of the app/page state at the end of the "call" phase,
-    # regardless of outcome, so passing runs are visually verifiable too, not
-    # just failures. This runs before teardown fixtures tear the driver down.
+    # Screenshot every test, pass or fail, before teardown quits the driver.
     if report.when == "call":
         driver = _get_active_driver(item)
         if driver:
@@ -723,8 +634,7 @@ def _git(*args):
 
 
 def _prune_old_reports(reports_dir, keep_count):
-    """Reports embed screenshots as base64, so each file can run 1-2MB+.
-    Keep only the most recent `keep_count` reports; delete the rest."""
+    """Keeps only the newest `keep_count` reports (each embeds screenshots, so they're large)."""
     reports = sorted(
         Path(reports_dir).glob("Execution_Report_*.html"),
         key=lambda p: p.stat().st_mtime,
@@ -738,7 +648,7 @@ def _prune_old_reports(reports_dir, keep_count):
 
 
 def pytest_sessionfinish(session, exitstatus):
-    """Compiles results and saves the dashboard into a dedicated reports directory"""
+    """Writes the HTML execution report to reports/."""
     reports_dir = os.path.join(session.config.rootdir, "reports")
     os.makedirs(reports_dir, exist_ok=True)
 
@@ -1097,9 +1007,7 @@ def pytest_sessionfinish(session, exitstatus):
 
                 search.addEventListener('input', applyFilters);
 
-                // Lightbox: click a screenshot thumbnail to view it full-size in-page.
-                // (A data: URI cannot be opened via target="_blank" -- browsers block
-                // top-level navigation to data: URLs, so this stays in-page instead.)
+                // In-page lightbox: browsers block top-level navigation to data: URLs.
                 var lightbox = document.getElementById('lightbox');
                 var lightboxImg = document.getElementById('lightbox-img');
 
@@ -1139,10 +1047,10 @@ def pytest_sessionfinish(session, exitstatus):
 
 @pytest.fixture(scope="session")
 def web_servers(request):
-    """Starts the rvsite backend + Vite dev server once per session. Output
-    goes to a log file, not an unread PIPE (that used to fill up and block
-    the dev server mid-request)."""
-    npm_script, web_port = _web_target(request)
+    """Starts rvsite's backend and Vite dev server once per session via `npm start`, its QA
+    target. Never `start:prod`: web tests must not touch the prod Firebase project. Output goes to
+    a log file; an unread PIPE fills up and blocks the dev server."""
+    web_port = quest_test_data.WEB_PORT
 
     if request.config.getoption("--browser") == "safari":
         _sweep_leaked_safari_windows()
@@ -1150,14 +1058,13 @@ def web_servers(request):
     print("\n--- [Web Test] Cleaning up Node processes on ports 3000, 5173, 5174 (5173 = stale prod-mode servers) ---")
     subprocess.run(["npx", "kill-port", "3000", "5173", "5174"], capture_output=True)
 
-    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Tests", "logs")
-    os.makedirs(log_dir, exist_ok=True)
-    web_log_path = os.path.join(log_dir, "web_servers.log")
+    os.makedirs(LOG_DIR, exist_ok=True)
+    web_log_path = os.path.join(LOG_DIR, "web_servers.log")
     web_log_fd = open(web_log_path, "w")
 
-    print(f"--- [Web Test] Starting backend and React servers via npm run {npm_script} (logs: {web_log_path}) ---")
+    print(f"--- [Web Test] Starting backend and React servers via npm start (logs: {web_log_path}) ---")
     backend_process = subprocess.Popen(
-        ["npm", "run", npm_script],
+        ["npm", "start"],
         cwd=WEB_APP_PATH,
         stdout=web_log_fd,
         stderr=subprocess.STDOUT,
@@ -1186,8 +1093,7 @@ def web_servers(request):
         web_log_fd.close()
         raise RuntimeError(f"Vite frontend failed to start on port {web_port} within timeout. See {web_log_path}")
 
-    # Best-effort warm-up: pull the index shell for the routes the tests hit
-    # first so Vite's dev-time transform has a head start before test one.
+    # Warm up Vite's transform for the routes tests hit first.
     for path in ("/", "/login", "/find-quest"):
         try:
             requests.get(f"http://localhost:{web_port}{path}", timeout=10)
@@ -1209,7 +1115,7 @@ def web_servers(request):
 
 @pytest.fixture(scope="function", autouse=True)
 def restart_node_server_for_web(request):
-    """Ensure the shared web servers are running for any test under Tests/web/."""
+    """Ensures the shared web servers are running for any test under Tests/web/."""
     test_path = str(request.node.fspath)
     if "/web/" not in test_path:
         yield
@@ -1221,17 +1127,14 @@ def restart_node_server_for_web(request):
 
 @pytest.fixture(scope="function", autouse=True)
 def retry_web_login(request, monkeypatch):
-    """Retries HomepageHelper.login() for web tests if sign-in gets stuck
-    (raises TimeoutException), reloading the homepage before each retry.
-    Wraps login() only for the test's duration -- the method itself is
-    untouched."""
+    """Retries HomepageHelper.login() for web tests on TimeoutException, reloading the homepage
+    first."""
     test_path = str(request.node.fspath)
     if "/web/" not in test_path:
         yield
         return
 
     original_login = HomepageHelper.login
-    _, web_port = _web_target(request)
 
     def login_with_retry(self, email, password, attempts=3):
         for attempt in range(1, attempts + 1):
@@ -1241,7 +1144,7 @@ def retry_web_login(request, monkeypatch):
                 if attempt == attempts:
                     raise
                 print(f"Sign-in appears stuck (attempt {attempt}/{attempts}); reloading and retrying...")
-                self.driver.get(f"http://localhost:{web_port}")
+                self.driver.get(quest_test_data.BASE_URL)
 
     monkeypatch.setattr(HomepageHelper, "login", login_with_retry)
     yield

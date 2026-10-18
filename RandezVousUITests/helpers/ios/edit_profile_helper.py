@@ -8,7 +8,6 @@ class EditProfileHelper:
         self.driver = driver
         self.wait = WebDriverWait(self.driver, 10)
 
-    # --- Locators ---
     edit_profile_header = (AppiumBy.ACCESSIBILITY_ID, "Edit Profile")
     done_button = (AppiumBy.ACCESSIBILITY_ID, "Done")
     profile_icon = (AppiumBy.ACCESSIBILITY_ID, "icon30")

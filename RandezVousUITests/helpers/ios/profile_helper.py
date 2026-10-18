@@ -2,6 +2,7 @@ from appium.webdriver.common.appiumby import AppiumBy
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+
 class ProfileHelper:
     def __init__(self, driver):
         self.driver = driver
@@ -16,16 +17,16 @@ class ProfileHelper:
         self.wait.until(EC.element_to_be_clickable(self.profile_tab)).click()
 
     def test_dynamic_score(self, expected_score):
-        """""Checks that users score is equal to a certain score"""
+        """Asserts the profile shows `expected_score`."""
         expected_score_str = str(expected_score)
         score_locator = (AppiumBy.XPATH, '(//XCUIElementTypeStaticText[@name="score"]/../*)[3]')
         score_element = self.wait.until(EC.visibility_of_element_located(score_locator))
         actual_score = score_element.text
         print(f"Users score is {actual_score}")
-        assert actual_score == expected_score_str, f"Expected score to be 125, but got {actual_score}"
+        assert actual_score == expected_score_str, f"Expected score {expected_score_str}, but got {actual_score}"
 
     def log_out_if_logged_in(self, check_score=False, expected_score=None):
-        """Checks if a user is logged in, scrolls if necessary, and signs them out."""
+        """Signs the user out from the profile menu, scrolling to the Log out button if needed."""
         self.navigate_to_profile()
         if check_score:
             self.test_dynamic_score(expected_score)
@@ -37,7 +38,7 @@ class ProfileHelper:
             log_out = self.driver.find_element(*self.logout_button)
             if not log_out.is_displayed():
                 raise Exception("Not visible")
-        except:
+        except Exception:
             print("Logout button not visible, scrolling to find it...")
             self.driver.execute_script('mobile: scroll', {
                 'direction': 'down',

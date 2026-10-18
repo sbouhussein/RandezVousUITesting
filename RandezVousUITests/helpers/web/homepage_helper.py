@@ -1,5 +1,3 @@
-import time
-
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -7,24 +5,22 @@ from selenium.common.exceptions import TimeoutException
 from helpers.web.quest_helper import QuestHelper
 from helpers.web.quest_test_data import BASE_URL
 
+
 class HomepageHelper:
+    find_quest_button = (By.XPATH, "//*[contains(text(), 'Find Quest')]")
+    login_button = (By.CSS_SELECTOR, "a.bg-primary-green[href*='/login']")
+    route_spinner = (By.CSS_SELECTOR, ".animate-spin")
+    email_input_button = (By.XPATH, "//input[@id='auth-email']")
+    password_input_button = (By.XPATH, "//input[@id='auth-password']")
+    sign_in_button = (By.XPATH, "//button[@type='submit' and normalize-space()='Sign In']")
+    auth_network_error = (By.XPATH, "//*[contains(normalize-space(), 'auth/network-request-failed')]")
+    guest_button = (By.XPATH, "//button[contains(normalize-space(), 'Continue as Guest')]")
+    sign_in_save = (By.XPATH, "//a[normalize-space()='Sign In to Save Progress']")
+
     def __init__(self, driver):
         self.driver = driver
-        # /login is a lazy React Router 7 route: after a full navigation the app
-        # re-hydrates, shows a spinner, and only mounts the auth form once
-        # useAuth() finishes initializing. On a freshly (re)started Vite dev
-        # server that first paint can take well over 10s, so give it room.
+        # /login's first paint after a fresh Vite start can take well over 10s.
         self.wait = WebDriverWait(self.driver, 30)
-
-        self.find_quest_button = (By.XPATH, "//*[contains(text(), 'Find Quest')]")
-        self.login_button = (By.CSS_SELECTOR, "a.bg-primary-green[href*='/login']")
-        self.route_spinner = (By.CSS_SELECTOR, ".animate-spin")
-        self.email_input_button = (By.XPATH, "//input[@id='auth-email']")
-        self.password_input_button = (By.XPATH, "//input[@id='auth-password']")
-        self.sign_in_button = (By.XPATH, "//button[@type='submit' and normalize-space()='Sign In']")
-        self.auth_network_error = (By.XPATH, "//*[contains(normalize-space(), 'auth/network-request-failed')]")
-        self.guest_button = (By.XPATH, "//button[contains(normalize-space(), 'Continue as Guest')]")
-        self.sign_in_save= (By.XPATH, "//a[normalize-space()='Sign In to Save Progress']")
 
     def find_quest(self, quest_code):
         quest_helper = QuestHelper(self.driver)
@@ -34,23 +30,17 @@ class HomepageHelper:
         quest_helper.click_find_quest()
 
     def click_find_quest(self):
-        """Waits for the button to be clickable, then clicks it."""
-        print("\n--- Starting find_quest ---")
+        print("Clicking Find Quest")
         self.wait.until(EC.element_to_be_clickable(self.find_quest_button)).click()
 
     def click_login_button(self):
-        print("Clicking login button")
+        print("Opening the login page")
         self.driver.get(f"{BASE_URL}/login")
         self._wait_for_login_form()
 
     def _wait_for_login_form(self):
-        """Waits out the RR7 hydrate/route spinner, then for the auth form.
-
-        Navigating straight to /login reloads the page; React Router 7 shows a
-        RouteSpinner while it hydrates and code-splits LoginPage, and the
-        component itself renders only a spinner until useAuth() resolves. The
-        #auth-email input does not exist in the DOM until all of that is done.
-        """
+        """Waits out the route spinner, then for the auth form. #auth-email isn't in the DOM until
+        React Router hydrates LoginPage and useAuth() resolves."""
         print("Waiting for login form to finish loading...")
         try:
             self.wait.until(EC.invisibility_of_element_located(self.route_spinner))
@@ -58,7 +48,6 @@ class HomepageHelper:
             print("Route spinner still visible; looking for the form anyway.")
         self.wait.until(EC.element_to_be_clickable(self.email_input_button))
 
-    ### Joining quest from URL ###
     def click_guest_button(self):
         print("Clicking continue as guest button")
         self.wait.until(EC.element_to_be_clickable(self.guest_button)).click()
@@ -68,20 +57,15 @@ class HomepageHelper:
         self.wait.until(EC.element_to_be_clickable(self.sign_in_save)).click()
 
     def login_from_url(self, email, password):
-        # Same hydrate/route-spinner wait login() does -- typing into the form before RR7 finishes
-        # mounting LoginPage intermittently lost the input or the Sign In click.
+        # Typing before LoginPage mounts intermittently loses the input or the Sign In click.
         self._wait_for_login_form()
         self._submit_credentials(email, password)
 
     def _submit_credentials(self, email, password, attempts=3, settle_timeout=15):
-        """Fills in and submits the sign-in form, riding out Firebase's intermittent sign-in stall.
-        Sometimes the Auth request hangs -- the page stays on /login with the form filled and no
-        error, until Firebase eventually reports `auth/network-request-failed` -- and the SDK
-        stays broken until the page reloads, so clicking Sign In again isn't enough. If the page
-        hasn't left /login after `settle_timeout` (or shows that error), reload the login page
-        (keeping its ?goto), re-enter the credentials and resubmit. Returns once the page leaves
-        /login, or after the final attempt (callers decide what a stuck sign-in means, e.g. a
-        missing username)."""
+        """Submits the sign-in form, retrying Firebase's intermittent sign-in stall: the page stays
+        on /login with no error (or eventually `auth/network-request-failed`), and the SDK stays
+        broken until a reload. Returns once the page leaves /login, or after the last attempt;
+        callers decide what a stuck sign-in means."""
         for attempt in range(1, attempts + 1):
             self.enter_email(email)
             self.enter_password(password)
@@ -101,8 +85,7 @@ class HomepageHelper:
             self._wait_for_login_form()
 
     def _login_page_state(self):
-        """What the login page shows right now -- for diagnosing a sign-in that didn't complete.
-        Never includes the password value."""
+        """Summary of the login page for diagnosing a stuck sign-in. Never includes the password."""
         try:
             alerts = [e.text for e in self.driver.find_elements(
                 By.XPATH, "//*[@role='alert' or contains(@class,'red-') or contains(@class,'error')]") if e.text.strip()]
@@ -114,14 +97,12 @@ class HomepageHelper:
             return f"(couldn't read login page state: {e})"
 
     def enter_email(self, email):
-        """Waits for the email to be clickable, then clicks it."""
         field = self.wait.until(EC.element_to_be_clickable(self.email_input_button))
         field.click()
         field.clear()
         field.send_keys(email)
 
     def enter_password(self, password):
-        """Waits for the password to be clickable, then clicks it."""
         field = self.wait.until(EC.element_to_be_clickable(self.password_input_button))
         field.click()
         field.clear()
@@ -135,7 +116,6 @@ class HomepageHelper:
         self._submit_credentials(email, password)
 
     def wait_until_signed_in(self):
-        """Waits for LoginPage's post-signin redirect (navigate(redirectTo),
-        see src/components/LoginPage.jsx) to fire."""
+        """Waits for LoginPage's post-sign-in redirect."""
         self.wait.until(lambda d: "/login" not in d.current_url)
 

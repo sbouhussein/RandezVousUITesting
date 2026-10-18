@@ -1,29 +1,21 @@
 import pytest
-import time
+
 from helpers.web.homepage_helper import HomepageHelper
 from helpers.web.quest_helper import QuestHelper
-from helpers.web.quest_test_data import ACTIVITY_QUEST_ID
+from helpers.web.quest_test_data import ACTIVITY_QUEST_ID, TEST_USER_EMAIL, TEST_USER_PASSWORD
+
+OUT_OF_RANGE_LOCATION = (42.282778, -154.829444)
 
 
-@pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
-def test_complete_location_activity(desktop_safari_driver):
-
-    email = "oalson123@gmail.com"
-    password = "OmarTest123"
-    quest_code = ACTIVITY_QUEST_ID
-
+@pytest.mark.cleanup(type="email", value=TEST_USER_EMAIL)
+def test_fail_to_complete_location_activity(desktop_safari_driver):
     nav = HomepageHelper(desktop_safari_driver)
     quest = QuestHelper(desktop_safari_driver)
 
-    print("Signing in")
-    nav.login(email, password)
-    nav.find_quest(quest_code)
+    nav.login(TEST_USER_EMAIL, TEST_USER_PASSWORD)
+    nav.find_quest(ACTIVITY_QUEST_ID)
 
-    print("Injecting bulletproof geolocation mock...")
-    latitude = 42.282778
-    longitude = -154.829444
+    quest.mock_geo_location(*OUT_OF_RANGE_LOCATION)
+    quest.check_location()
 
-    quest.mock_geo_location(desktop_safari_driver, latitude, longitude)
-
-    print("Triggering location check-in...")
-    quest.complete_location_activity(fail_check = True)
+    assert quest.is_location_error_visible(), "Expected a location verification error when out of range"

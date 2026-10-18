@@ -6,14 +6,10 @@ from helpers.ios.base_helper import BaseHelper
 from helpers.ios.login_page_helper import LoginPageHelper
 from helpers.ios.profile_helper import ProfileHelper
 from helpers.ios.device_helper import DeviceHelper
+from helpers.ios.system_prompt_helper import SystemPromptHelper
 
 
 class QuestHelper(BaseHelper, LoginPageHelper, ProfileHelper):
-    def __init__(self, driver):
-        super().__init__(driver)
-        self.driver = driver
-        self.wait = WebDriverWait(self.driver, 10)
-
     quests_tab = (AppiumBy.IOS_PREDICATE, "label == ' Quests '")
     home_tab = (AppiumBy.ACCESSIBILITY_ID, "house")
     explore_tab = (AppiumBy.ACCESSIBILITY_ID, " Explore ")
@@ -26,27 +22,31 @@ class QuestHelper(BaseHelper, LoginPageHelper, ProfileHelper):
     info_button = (AppiumBy.IOS_PREDICATE, "label == 'Quest rules'")
     daily_challenge_section_label = (AppiumBy.ACCESSIBILITY_ID, "DAILY CHALLENGE")
     start_daily_quest_button = (AppiumBy.IOS_CLASS_CHAIN, '**/XCUIElementTypeButton[`name CONTAINS "Start!"`]')
-    sign_in_prompt = (AppiumBy.ACCESSIBILITY_ID,
-        (
-            "Create an account or sign back in to customize your profile and get"
-            " activities personalized just for you."
-        ),
-                      )
+    # First-launch "Monthly Quests" carousel that covers the Quests page.
+    onboarding_skip_button = (AppiumBy.IOS_PREDICATE, "type == 'XCUIElementTypeButton' AND label == 'Skip'")
+    sign_in_prompt = (
+        AppiumBy.ACCESSIBILITY_ID,
+        "Create an account or sign back in to customize your profile and get activities personalized just for you.",
+    )
 
     def navigate_to_quests_tab(self):
         print("Navigating to Quests Tab")
-        # Right after a real login the app is still settling and the first tap
-        # on the tab is sometimes swallowed (tab found and "clicked", page never
-        # changes), so retry the tap instead of failing on the first miss.
+        # Right after login the first tap on the tab is sometimes swallowed, so retry it.
         attempts = 3
         for attempt in range(1, attempts + 1):
             self.wait.until(EC.element_to_be_clickable(self.quests_tab)).click()
             try:
                 WebDriverWait(self.driver, 8).until(EC.visibility_of_element_located(self.quests_header))
+                self.skip_onboarding_if_present()
                 return
             except TimeoutException:
                 print(f"Quests page did not open (attempt {attempt}/{attempts}); retrying tap")
         raise AssertionError("Quests page header not visible after clicking tab")
+
+    def skip_onboarding_if_present(self):
+        if self.is_visible(self.onboarding_skip_button, custom_timeout=3):
+            self.click(self.onboarding_skip_button)
+            print("Skipped the Monthly Quests onboarding carousel.")
 
     def click_custom_quest_button(self):
         self.wait.until(EC.element_to_be_clickable(self.custom_quest_button)).click()
@@ -59,9 +59,6 @@ class QuestHelper(BaseHelper, LoginPageHelper, ProfileHelper):
     def start_the_daily_challenge(self):
         self.wait.until(EC.element_to_be_clickable(self.start_daily_quest_button)).click()
 
-    def get_quest_title(self):
-        return self.wait.until(EC.presence_of_element_located(self.quest_title)).text
-
     def is_active(self):
         try:
             return self.wait.until(EC.visibility_of_element_located(self.active_badge)).is_displayed()
@@ -73,15 +70,12 @@ class QuestHelper(BaseHelper, LoginPageHelper, ProfileHelper):
             print("App is signed in (anonymous or account). Fast-resetting to signed-out state.")
             DeviceHelper(self.driver).fast_reset_to_signed_out()
 
-        elif self.is_visible(self.login_with_code_button):
-            pass
 
 class CustomQuestPage(BaseHelper):
     def __init__(self, driver):
         self.driver = driver
         self.wait = WebDriverWait(self.driver, 15)
 
-    back_button = (AppiumBy.ACCESSIBILITY_ID, "BackButton")
     quest_code_input_field = (AppiumBy.CLASS_NAME, "XCUIElementTypeTextField")
     find_quest_button = (AppiumBy.ACCESSIBILITY_ID, "Find Quest")
     clear_search_button = (AppiumBy.ACCESSIBILITY_ID, "Clear Search")
@@ -100,24 +94,30 @@ class CustomQuestPage(BaseHelper):
     prompt_text_box = (AppiumBy.IOS_CLASS_CHAIN, "**/XCUIElementTypeTextView")
     submit_response_button = (AppiumBy.ACCESSIBILITY_ID, "Submit Response")
     check_answer_button = (AppiumBy.ACCESSIBILITY_ID, "Check Answer")
-    not_now_rating_button = (AppiumBy.ACCESSIBILITY_ID, "Not Now")
     dismiss_after_completing_activity = (AppiumBy.ACCESSIBILITY_ID, "PopoverDismissRegion")
     quests_nav_bar = (AppiumBy.ACCESSIBILITY_ID, "Quests")
     back_button = (AppiumBy.IOS_PREDICATE, "label == 'Back'")
     add_to_quest_button = (AppiumBy.ACCESSIBILITY_ID, "Add to Quest")
     completed_activity_button = (AppiumBy.ACCESSIBILITY_ID, "I've completed this activity")
     submit_photo_button = (AppiumBy.XPATH, "//XCUIElementTypeButton[contains(@label, 'Submit a Photo')]")
+    photo_library_button = (AppiumBy.ACCESSIBILITY_ID, "photo.on.rectangle.angled")
+    send_button = (AppiumBy.IOS_PREDICATE, "label == 'Send'")
     complete_quest_button = (AppiumBy.ACCESSIBILITY_ID, "Complete in Quest")
+    # QuestProgressView (the "Add <activity> to <quest>" sheet). Its button shares the card's label,
+    # and the card's copy comes first in the tree, so anchor on the sheet's own label.
+    progress_sheet_label = (AppiumBy.ACCESSIBILITY_ID, "Current Progress:")
+    sheet_complete_quest_button = (
+        AppiumBy.XPATH,
+        "//XCUIElementTypeStaticText[@name='Current Progress:']"
+        "/following::XCUIElementTypeButton[@name='Complete in Quest']",
+    )
     finish_quest_button = (AppiumBy.ACCESSIBILITY_ID, "Finish Quest")
     log_in_button = (AppiumBy.ACCESSIBILITY_ID, "Log in")
     prompt_nav_bar = (AppiumBy.ACCESSIBILITY_ID, "Prompt Activity")
     trivia_incorrect_message = (AppiumBy.ACCESSIBILITY_ID, "Not quite, try again.")
-    # Custom-quest wording (PromptResponseView.swift / QuestProgressView.swift):
-    # out of range shows this text in place of the "Complete in Quest" button
-    # entirely, rather than letting the tap happen and erroring afterward.
+    # Shown in place of the "Complete in Quest" button when the user is out of range.
     out_of_range_message = (AppiumBy.IOS_PREDICATE, 'label CONTAINS "away from being able to complete this activity"')
 
-    """""Universal functions"""
     def join_custom_quest(self, quest_code):
         quest_helper = QuestHelper(self.driver)
 
@@ -126,9 +126,7 @@ class CustomQuestPage(BaseHelper):
         self.enter_quest_code(quest_code)
         self.click_find_quest()
         self.click_start_quest()
-        # Starting a quest for the first time drops the user straight into
-        # the quest detail screen (not back to the Quests list), so confirm
-        # success via a marker that's actually on that screen.
+        # A first-time start lands on the quest detail screen, not the Quests list.
         self.wait.until(EC.visibility_of_element_located(self.primary_exit_quest_button))
 
     def enter_quest_code(self, code):
@@ -159,8 +157,8 @@ class CustomQuestPage(BaseHelper):
                 try:
                     element.click()
                     print(f"Clicked '{activity}' successfully.")
-                    return  # We are done!
-                except:
+                    return
+                except Exception:
                     print("Click failed, scrolling to center element...")
                     scroll_view = self.driver.find_element(AppiumBy.CLASS_NAME, "XCUIElementTypeScrollView")
                     self.driver.execute_script('mobile: scroll',
@@ -176,114 +174,89 @@ class CustomQuestPage(BaseHelper):
         raise Exception(f"Could not find activity '{activity}' after {max_swipes} scrolls.")
 
     def click_activity(self, activity, max_swipes=5):
-        # 1. Standard locator (we use math for visibility, not Appium)
+        """Swipes the horizontal activity carousel until `activity` is on screen, then taps its
+        center. Appium reports off-screen carousel cards as present, so visibility is judged from
+        the element's x position instead."""
         locator = (AppiumBy.IOS_PREDICATE, f'name CONTAINS "{activity}"')
 
-        # 2. Temporarily turn OFF global implicit waits
-        self.driver.implicitly_wait(0)
         short_wait = WebDriverWait(self.driver, 2)
-
-        # Get the physical width of the phone screen for our math check
         screen_width = self.driver.get_window_size()['width']
 
-        try:
-            for i in range(max_swipes):
+        for i in range(max_swipes):
+            try:
+                element = short_wait.until(EC.presence_of_element_located(locator))
+                rect = element.rect
+
+                # In the right-most 15% of the screen (or past it) counts as off-screen.
+                if rect['x'] >= (screen_width * 0.85):
+                    print(f"Element in DOM but off-screen (x={rect['x']}). Forcing swipe...")
+                    raise TimeoutException("Element is off screen")
+
                 try:
-                    # 3. Look for the element in the DOM
-                    element = short_wait.until(EC.presence_of_element_located(locator))
+                    center_x = rect['x'] + (rect['width'] / 2)
+                    center_y = rect['y'] + (rect['height'] / 2)
+                    self.driver.execute_script("mobile: tap", {"x": center_x, "y": center_y})
+                    print(f"Clicked '{activity}' via coordinate tap (x={center_x}, y={center_y}).")
+                    return
 
-                    # --- THE MATH CHECK ---
-                    rect = element.rect
-
-                    # If the element is technically in the code but sitting in the right-most 15%
-                    # (or entirely off-screen), throw an exception to force a swipe.
-                    if rect['x'] >= (screen_width * 0.85):
-                        print(f"Element in DOM but off-screen (x={rect['x']}). Forcing swipe...")
-                        raise TimeoutException("Element mathematically off screen")
-                    # ----------------------
-
-                    try:
-                        # 4. It passed the math check! Calculate the exact center pixel.
-                        center_x = rect['x'] + (rect['width'] / 2)
-                        center_y = rect['y'] + (rect['height'] / 2)
-
-                        # Force iOS to tap those exact mathematical coordinates
-                        self.driver.execute_script("mobile: tap", {"x": center_x, "y": center_y})
-
-                        print(f"Clicked '{activity}' successfully via coordinate tap (x={center_x}, y={center_y}).")
-                        return  # Success! Exit the function.
-
-                    except Exception as e:
-                        # Fallback just in case something intercepts the strict coordinate tap
-                        print(f"Coordinate tap failed ({type(e).__name__}). Scrolling to center element...")
-                        scroll_view = self.driver.find_element(AppiumBy.CLASS_NAME, "XCUIElementTypeScrollView")
-                        self.driver.execute_script('mobile: scroll',
-                                                   {'direction': 'right', 'element': scroll_view.id, 'toVisible': True})
-                        self.wait.until(EC.element_to_be_clickable(locator)).click()
-                        return
-
-                except TimeoutException:
-                    # 5. Element wasn't in DOM, OR it failed the math check. Execute ONE swipe.
-                    print(f"Activity not fully on screen. Swiping right... (Attempt {i + 1}/{max_swipes})")
+                except Exception as e:
+                    print(f"Coordinate tap failed ({type(e).__name__}). Scrolling to center element...")
                     scroll_view = self.driver.find_element(AppiumBy.CLASS_NAME, "XCUIElementTypeScrollView")
-                    self.driver.execute_script('mobile: scroll', {'direction': 'right', 'element': scroll_view.id})
+                    self.driver.execute_script('mobile: scroll',
+                                               {'direction': 'right', 'element': scroll_view.id, 'toVisible': True})
+                    self.wait.until(EC.element_to_be_clickable(locator)).click()
+                    return
 
-            # 6. Loop exhausted
-            raise Exception(f"Could not find activity '{activity}' after {max_swipes} swipes.")
+            except TimeoutException:
+                print(f"Activity not fully on screen. Swiping right... (Attempt {i + 1}/{max_swipes})")
+                scroll_view = self.driver.find_element(AppiumBy.CLASS_NAME, "XCUIElementTypeScrollView")
+                self.driver.execute_script('mobile: scroll', {'direction': 'right', 'element': scroll_view.id})
 
-        finally:
-            # 7. ALWAYS turn implicit wait back on when the function finishes (or fails)
-            # Change '10' to whatever your standard framework wait time is.
-            self.driver.implicitly_wait(10)
+        raise Exception(f"Could not find activity '{activity}' after {max_swipes} swipes.")
 
     def dismiss_rating_popup_if_present(self):
-        """Checks for the App Store rating popup and dismisses it if it blocks the view."""
+        SystemPromptHelper(self.driver).dismiss_rating_prompt(timeout=10)
+
+    def _click_past_rating_popup(self, locator):
+        """The rating card can land after dismiss_rating_popup_if_present gives up and cover `locator`."""
         try:
-            popup_wait = WebDriverWait(self.driver, 10)
-            not_now_element = popup_wait.until(EC.element_to_be_clickable(self.not_now_rating_button))
-            not_now_element.click()
-            print("System Alert: Dismissed the 'Enjoying RandezVous?' rating popup.")
+            self.click(locator)
         except TimeoutException:
-            pass
+            if not SystemPromptHelper(self.driver).dismiss_rating_prompt(timeout=2):
+                raise
+            self.click(locator)
 
     def click_out_of_activity(self):
         """Taps the background to dismiss the bottom sheet."""
         print("clicking out of the activity...")
-        self.wait.until(EC.element_to_be_clickable(self.dismiss_after_completing_activity)).click()
+        self._click_past_rating_popup(self.dismiss_after_completing_activity)
 
     def click_back(self):
         print("clicking back...")
-        self.wait.until(EC.element_to_be_clickable(self.back_button)).click()
+        self._click_past_rating_popup(self.back_button)
 
-    """"Trivia Based Activity"""
+    # Trivia
+
     def click_check_requirements(self):
-        """Clicks the 'Check Quest Requirements' button."""
         self.wait.until(EC.element_to_be_clickable(self.check_quest_requirements)).click()
 
     def click_view_prompt(self):
-        """Clicks the 'View Prompt' button."""
         self.wait.until(EC.element_to_be_clickable(self.view_prompt)).click()
 
     def click_add_to_quest(self):
-        """Clicks the 'Add To Quest' button."""
         self.wait.until(EC.element_to_be_clickable(self.add_to_quest_button)).click()
 
     def enter_prompt(self, response_text):
-        """Waits for the text box to be visible, clicks it, and enters the response text."""
         text_view = self.wait.until(EC.element_to_be_clickable(self.prompt_text_box))
         text_view.click()
         text_view.clear()
         text_view.send_keys(response_text)
 
     def click_submit(self):
-        """Waits for the 'submit response' button to become enabled and clicks it."""
-        submit_button = self.wait.until(EC.element_to_be_clickable(self.submit_response_button))
-        submit_button.click()
+        self.wait.until(EC.element_to_be_clickable(self.submit_response_button)).click()
 
     def click_check_answer(self):
-        """Waits for the 'Check Answer' button to become enabled and clicks it."""
-        check_button = self.wait.until(EC.element_to_be_clickable(self.check_answer_button))
-        check_button.click()
+        self.wait.until(EC.element_to_be_clickable(self.check_answer_button)).click()
 
     def complete_trivia_activity(self, activity, response_text):
         self.click_trivia_activity(activity)
@@ -296,9 +269,8 @@ class CustomQuestPage(BaseHelper):
         self.click_back()
 
     def attempt_trivia_activity(self, activity, response_text):
-        """Like complete_trivia_activity, but stops right after checking the
-        answer -- doesn't assume success, so a caller can check either
-        outcome (e.g. the incorrect-answer message)."""
+        """Like complete_trivia_activity, but stops after checking the answer so the caller can
+        check either outcome."""
         self.click_trivia_activity(activity)
         self.click_check_requirements()
         self.click_view_prompt()
@@ -311,23 +283,21 @@ class CustomQuestPage(BaseHelper):
         except TimeoutException:
             return False
 
-    """" Honor Based Activity"""
-    def click_add_to_quest_button(self):
-        assert self.wait.until(EC.visibility_of_element_located((AppiumBy.ACCESSIBILITY_ID, "Honor Code Activity")))
-        self.wait.until(EC.element_to_be_clickable(self.add_to_quest_button)).click()
+    # Honor
 
     def click_completed_activity_button(self):
         self.wait.until(EC.element_to_be_clickable(self.completed_activity_button)).click()
 
-    def complete_honor_based_activity(self, activity, login = False):
+    def complete_honor_based_activity(self, activity):
         self.click_activity(activity)
-        self.click_complete_quest_button()
+        self.open_quest_sheet()
         self.click_completed_activity_button()
         self.dismiss_rating_popup_if_present()
         self.click_back()
 
-    """" Prompt Based Activity"""
-    def complete_prompt_activity(self, activity, response_text, click_back = False):
+    # Prompt
+
+    def complete_prompt_activity(self, activity, response_text, click_back=False):
         self.click_activity(activity)
         self.click_check_requirements()
         self.click_view_prompt()
@@ -338,22 +308,28 @@ class CustomQuestPage(BaseHelper):
         if click_back:
             self.click_back()
 
-    """" Location Based Activity"""
+    # Location
+
     def click_complete_quest_button(self):
         self.wait.until(EC.element_to_be_clickable(self.complete_quest_button)).click()
 
+    def open_quest_sheet(self):
+        """EligibleQuestOverlay auto-opens the sheet 1s after appearing for signed-in users at the
+        location; guests must tap the banner, and tapping it while auto-opened toggles it shut."""
+        if not self.is_visible(self.progress_sheet_label, custom_timeout=4):
+            self.click_complete_quest_button()
+            self.wait.until(EC.visibility_of_element_located(self.progress_sheet_label))
+
     def complete_location_activity(self, activity):
         self.click_activity(activity)
-        self.click_complete_quest_button()
-        self.click_complete_quest_button()
+        self.open_quest_sheet()
+        self.click(self.sheet_complete_quest_button)
         self.dismiss_rating_popup_if_present()
         self.click_back()
 
     def is_out_of_range_message_visible(self, activity):
-        """When out of range, View Quest Requirements shows a distance
-        message (e.g. "You're 170 mi away from being able to complete this
-        activity in your quest") instead of a usable 'Complete in Quest'
-        button."""
+        """Out of range, the requirements screen shows a distance message ("You're 170 mi away
+        from being able to complete this activity...") instead of 'Complete in Quest'."""
         self.click_activity(activity)
         self.click_check_requirements()
         try:
@@ -361,33 +337,21 @@ class CustomQuestPage(BaseHelper):
         except TimeoutException:
             return False
 
-    """" Photo Based Activity"""
+    # Photo
+
     def click_submit_photo_button(self):
         self.wait.until(EC.element_to_be_clickable(self.submit_photo_button)).click()
 
     def click_photo_button(self):
-        print("Waiting for the photo library icon...", flush=True)
-
-        library_locator = (AppiumBy.ACCESSIBILITY_ID, "photo.on.rectangle.angled")
-
-        btn = self.wait.until(EC.presence_of_element_located(library_locator))
-
+        btn = self.wait.until(EC.presence_of_element_located(self.photo_library_button))
         rect = btn.rect
-        abs_x = rect['x'] + (rect['width'] / 2)
-        abs_y = rect['y'] + (rect['height'] / 2)
-
-        print(f"Tapping absolute coordinates: x={abs_x}, y={abs_y}", flush=True)
-
-        self.driver.execute_script("mobile: tap", {
-            "x": abs_x,
-            "y": abs_y
-        })
-
-        print("Absolute coordinate tap executed.", flush=True)
+        x = rect['x'] + (rect['width'] / 2)
+        y = rect['y'] + (rect['height'] / 2)
+        print(f"Tapping photo library button at x={x}, y={y}")
+        self.driver.execute_script("mobile: tap", {"x": x, "y": y})
 
     def select_most_recent_image(self):
-        print("Finding image by identifier...")
-        # The picker populates its grid asynchronously after opening, so wait rather than reading it cold.
+        # The picker fills its grid asynchronously after opening.
         first_photo = self.wait.until(
             EC.presence_of_element_located((AppiumBy.ACCESSIBILITY_ID, "PXGGridLayout-Info"))
         )
@@ -396,8 +360,7 @@ class CustomQuestPage(BaseHelper):
         x = rect['x'] + (rect['width'] / 2)
         y = rect['y'] + (rect['height'] / 2)
 
-        print(f"Executing REAL TAP on coordinates: x={x}, y={y}")
-
+        print(f"Tapping most recent photo at x={x}, y={y}")
         self.driver.execute_script('mobile: tap', {
             'x': x,
             'y': y,
@@ -405,21 +368,13 @@ class CustomQuestPage(BaseHelper):
         })
 
     def click_send_button(self):
-        print("Waiting for Send button visibility...")
-        send_button = (AppiumBy.IOS_PREDICATE, "label == 'Send'")
-        self.wait.until(EC.visibility_of_element_located(send_button)).click()
-        print("Clicked Send Button")
+        self.wait.until(EC.visibility_of_element_located(self.send_button)).click()
 
     def complete_photo_activity(self, activity):
-        print("Step 1: Clicking activity...")
         self.click_activity(activity)
-        print("Step 2: Checking requirements...")
         self.click_check_requirements()
-        print("Step 3: Submitting photo button...")
         self.click_submit_photo_button()
-        print("Step 4: Clicking photo trigger...")
         self.click_photo_button()
-        print("Step 5: Selecting most recent image...")
         self.select_most_recent_image()
         self.click_send_button()
         self.dismiss_rating_popup_if_present()
@@ -427,9 +382,7 @@ class CustomQuestPage(BaseHelper):
         self.click_back()
 
     def complete_all_activities(self):
-        # Activity cards are labeled by their bare type ("Trivia", "Honor",
-        # etc.) -- not "Trivia Activity"/"Honor Code Activity" -- confirmed
-        # via live page_source dump against randezvous-qa's test-automation-quest.
+        # Activity cards are labeled by bare type ("Trivia"), not "Trivia Activity".
         self.complete_trivia_activity("Trivia", "Trivia")
         self.complete_photo_activity("Photo")
         self.complete_location_activity("Location")
@@ -442,8 +395,3 @@ class CustomQuestPage(BaseHelper):
     def click_exit_quest(self):
         self.wait.until(EC.element_to_be_clickable(self.primary_exit_quest_button)).click()
         self.wait.until(EC.element_to_be_clickable(self.secondary_exit_confirm_button)).click()
-
-
-
-
-

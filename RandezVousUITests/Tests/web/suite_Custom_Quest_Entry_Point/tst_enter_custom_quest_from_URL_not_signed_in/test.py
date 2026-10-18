@@ -2,10 +2,10 @@ import pytest
 
 from helpers.web.homepage_helper import HomepageHelper
 from helpers.web.quest_helper import QuestHelper
-from helpers.web.quest_test_data import ACTIVITY_QUEST_ID, BASE_URL, onboarding_url
+from helpers.web.quest_test_data import ACTIVITY_QUEST_ID, BASE_URL, TEST_USER_EMAIL, onboarding_url
 
 
-@pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
+@pytest.mark.cleanup(type="email", value=TEST_USER_EMAIL)
 def test_enter_custom_quest_from_url_not_signed_in(desktop_safari_driver):
     desktop_safari_driver.get(BASE_URL)
 
