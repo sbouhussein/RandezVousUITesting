@@ -1,9 +1,10 @@
 import pytest
 
-from helpers.ios.custom_quest_helper import CustomQuestPage, QuestHelper
-from helpers.ios.login_page_helper import LoginPageHelper, WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
-from helpers.ios.device_helper import DeviceHelper
-from helpers.ios.sign_in_overlay_helper import DashboardOverlay
+from helpers.ios import (
+    CustomQuestPage, QuestHelper, LeaderboardHelper, LoginPageHelper,
+    WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper, DeviceHelper,
+    DashboardOverlay,
+)
 
 
 @pytest.mark.cleanup(type="username", value="AutomatedTester")
@@ -20,6 +21,7 @@ def test_complete_quest_from_dashboard(rv_driver):
     custom_quest = CustomQuestPage(driver)
     login_helper = LoginPageHelper(driver)
     device_helper = DeviceHelper(rv_driver)
+    leaderboard = LeaderboardHelper(rv_driver)
 
     quest_helper.sign_out_if_signed_in()
     login_helper.click_skip_authentication()
@@ -37,4 +39,12 @@ def test_complete_quest_from_dashboard(rv_driver):
 
     device_helper.set_simulator_location()
     custom_quest.complete_all_activities()
+    custom_quest.dismiss_quest_completion_overlay()
 
+    # Guest usernames can repeat across leftover rows, so accept any row for this name at the expected score.
+    expected = leaderboard.expected_score(activities_completed=5, quest_completed=True)
+    leaderboard.open()
+    leaderboard.get_row(username, points=expected)
+    points = [r["points"] for r in leaderboard.get_rows_for(username)]
+    assert expected in points, \
+        f"'{username}' should have {expected} points on the leaderboard after completing the quest, saw {points}"

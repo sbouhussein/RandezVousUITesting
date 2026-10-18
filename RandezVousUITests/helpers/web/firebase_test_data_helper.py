@@ -1,6 +1,4 @@
-"""Direct Firestore setup/teardown for quest-access scenarios (bans, stale grants) with no test-facing API.
-Mirrors the restriction schema in rvsite's backend/lib/restrictionUtils.js -- keep in sync if that changes.
-Assumes firebase_admin is already initialized (conftest.py's firebase_init fixture)."""
+"""Direct Firestore setup/teardown for quest-access scenarios; mirrors rvsite's restrictionUtils.js and needs firebase_init."""
 from firebase_admin import auth as fb_auth, firestore
 
 
@@ -31,7 +29,6 @@ def unban_user(org_id, uid):
 
 
 def has_quest_grant(email, qid):
-    """True if `email`'s user holds a questGrants doc for `qid` -- written by /api/quest/join only after
-    its access checks (domain policy, bans) pass, so it's the backend's own proof the join succeeded."""
+    """True if `email` has a questGrants doc for `qid`, which /api/quest/join writes only after its checks pass."""
     uid = fb_auth.get_user_by_email(email).uid
     return firestore.client().collection("Users").document(uid).collection("questGrants").document(qid).get().exists

@@ -1,14 +1,12 @@
 import pytest
 
-from helpers.web.access_control_helper import AccessControlHelper
-from helpers.web.homepage_helper import HomepageHelper
+from helpers.web import AccessControlHelper, HomepageHelper
 from helpers.web.quest_test_data import ORG_ID, OPEN_QUEST_ID, TEST_USER_EMAIL, TEST_USER_PASSWORD, feed_url
 
 
 @pytest.mark.cleanup(type="email", value=TEST_USER_EMAIL)
 def test_feed_page_shows_restricted_banner_when_banned(desktop_safari_driver, banned_user):
-    """QUEST_ONBOARDING_UX.md FeedPage audit: banned user now sees RestrictedBanner instead of
-    the generic "Feed Not Available" error."""
+    """A banned user sees RestrictedBanner instead of the generic "Feed Not Available" error."""
     driver = desktop_safari_driver
     banned_user(TEST_USER_EMAIL, ORG_ID, OPEN_QUEST_ID)
 

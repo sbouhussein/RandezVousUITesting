@@ -1,19 +1,12 @@
 import pytest
 
-from helpers.web.access_control_helper import AccessControlHelper
-from helpers.web.homepage_helper import HomepageHelper
-from helpers.web.onboarding_helper import OnboardingPageHelper
+from helpers.web import AccessControlHelper, HomepageHelper, OnboardingPageHelper
 from helpers.web.quest_test_data import RESTRICTED_QUEST_ID, TEST_USER_EMAIL, TEST_USER_PASSWORD, onboarding_url
 
 
 @pytest.mark.cleanup(type="email", value=TEST_USER_EMAIL)
 def test_onboarding_desktop_shows_google_signin_for_wrong_provider(desktop_safari_driver):
-    """QUEST_ONBOARDING_UX.md row 12, wrong-provider case: TEST_USER_EMAIL is an email/password
-    account with no linked Google provider, so /api/quest/join's domain check
-    (backend/routes/quests.js) rejects it with a "sign in with Google" message before it can
-    even reach the ban check. AccessErrorPanel's isWrongProvider branch fires: "Sign in with
-    Google", not "Switch accounts" (that button is for a Google account on the wrong domain --
-    a different backend message this account can't produce)."""
+    """An email/password account on a domain-restricted quest gets "Sign in with Google", not "Switch accounts"."""
     driver = desktop_safari_driver
 
     nav = HomepageHelper(driver)

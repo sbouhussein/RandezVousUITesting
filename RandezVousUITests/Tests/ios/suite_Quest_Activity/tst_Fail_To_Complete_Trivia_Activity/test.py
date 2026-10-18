@@ -1,7 +1,7 @@
 import pytest
 
-from helpers.ios.custom_quest_helper import CustomQuestPage, QuestHelper
-from helpers.ios.login_page_helper import LoginPageHelper
+from helpers.ios import CustomQuestPage
+
 
 
 @pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
@@ -13,12 +13,8 @@ def test_fail_to_complete_trivia_activity(rv_driver):
     wrong_response = "Triviq"
 
     custom_quest = CustomQuestPage(rv_driver)
-    login_helper = LoginPageHelper(rv_driver)
-    quest_helper = QuestHelper(rv_driver)
 
-    quest_helper.sign_out_if_signed_in()
-    login_helper.login_with_credentials(email, password)
-    custom_quest.join_custom_quest(quest)
+    custom_quest.sign_in_and_join(email, password, quest)
 
     custom_quest.attempt_trivia_activity(activity, wrong_response)
 

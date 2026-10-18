@@ -1,23 +1,12 @@
 from urllib.parse import urlparse, parse_qs, unquote
 
 from helpers.android.device_helper import DeviceHelper
-from helpers.web.onboarding_helper import OnboardingPageHelper
+from helpers.web import OnboardingPageHelper
 from helpers.web.quest_test_data import BASE_URL, ORG_ID, RESTRICTED_QUEST_ID, onboarding_url, quest_url
 
 
 def test_onboarding_android_chrome_fallback_redirects_to_login_when_signed_out(android_chrome_driver):
-    """QUEST_ONBOARDING_UX.md row 3, Android path: mobile_chrome_driver's UA trick can
-    only verify the fallback href -- a desktop browser has no app to resolve the intent
-    link against, so this needs a real Android browser to exercise the actual navigation.
-    Android's intent:// URI carries its fallback (S.browser_fallback_url) in the URI
-    itself, so Chrome navigates there the instant the intent fails to resolve -- no
-    1500ms blur-timeout wait like iOS's custom-scheme deep link (see
-    test_onboarding_ios_safari_fallback_redirects_to_login_when_signed_out). Requires the
-    RV TWA NOT installed, or the intent resolves straight to the app and the fallback
-    never fires. (There is no installed-app counterpart on Android: the intent's target
-    host is only ever verified against the real randezvous.com domain, which this
-    localhost-backed suite can never serve from, so that branch isn't testable here --
-    see rvsite/public/.well-known/assetlinks.json.)"""
+    """Android intent links carry their fallback URL, so a signed-out visitor lands on /login; needs the RV TWA not installed."""
     driver = android_chrome_driver
     DeviceHelper(driver).require_app_installed(installed=False)
 
@@ -25,8 +14,7 @@ def test_onboarding_android_chrome_fallback_redirects_to_login_when_signed_out(a
     driver.get(start_url)
 
     onboarding = OnboardingPageHelper(driver)
-    # Android Chrome sessions also use NATIVE_APP/WEBVIEW contexts -- switch into
-    # WEBVIEW before any DOM lookup (see BaseHelper.switch_to_webview).
+    # Switch into WEBVIEW before any DOM lookup.
     onboarding.switch_to_webview()
     onboarding.click_open_in_app()
 

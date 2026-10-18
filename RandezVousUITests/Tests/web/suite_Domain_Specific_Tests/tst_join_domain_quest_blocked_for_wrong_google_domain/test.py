@@ -1,10 +1,7 @@
 import pytest
 
-from helpers.web.access_control_helper import AccessControlHelper
+from helpers.web import AccessControlHelper, GoogleIdentityHelper, OnboardingPageHelper, QuestHelper
 from helpers.web.firebase_test_data_helper import clear_stale_grant, has_quest_grant
-from helpers.web.google_identity_helper import GoogleIdentityHelper
-from helpers.web.onboarding_helper import OnboardingPageHelper
-from helpers.web.quest_helper import QuestHelper
 from helpers.web.quest_test_data import (
     GOOGLE_WRONG_DOMAIN_EMAIL, GOOGLE_WRONG_DOMAIN_UID, RESTRICTED_QUEST_ID, onboarding_url,
 )
@@ -12,14 +9,7 @@ from helpers.web.quest_test_data import (
 
 @pytest.mark.cleanup(type="email", value=GOOGLE_WRONG_DOMAIN_EMAIL)
 def test_join_domain_quest_blocked_for_wrong_google_domain(desktop_safari_driver):
-    """Unhappy path for a domain-restricted quest: a signed-in Google user on the WRONG domain tries to
-    join `web-restricted` (randezvous.com only) and is refused -- they see the domain error with a
-    "Switch accounts" remedy, never reach the quest, and no access grant is created.
-
-    The user is a fabricated QA account with a `google.com` provider entry on @gmail.com (see
-    seed_qa_web_fixtures.py), signed in by custom token. That makes the backend's join check reject on the
-    wrong-DOMAIN branch -- distinct from an email/password account, which is rejected on the wrong-PROVIDER
-    branch ("Sign in with Google"; covered by tst_onboarding_desktop_shows_google_signin_for_wrong_provider)."""
+    """A Google user on the wrong domain is refused with a "Switch accounts" option and gets no access grant."""
     driver = desktop_safari_driver
 
     # A leftover grant would bypass the domain check this test is about.

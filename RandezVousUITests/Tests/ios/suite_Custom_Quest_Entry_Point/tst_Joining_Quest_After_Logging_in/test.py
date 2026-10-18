@@ -1,8 +1,6 @@
 import pytest
 
-from helpers.ios.custom_quest_helper import CustomQuestPage, QuestHelper
-from helpers.ios.leaderboard_helper import LeaderboardHelper
-from helpers.ios.login_page_helper import LoginPageHelper
+from helpers.ios import CustomQuestPage, LeaderboardHelper
 
 
 @pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
@@ -12,13 +10,9 @@ def test_joining_quest_after_logging_in(rv_driver):
     username = "OmarTesting"
     quest = "test-automation-quest"
     custom_quest = CustomQuestPage(rv_driver)
-    login_helper = LoginPageHelper(rv_driver)
-    quest_helper = QuestHelper(rv_driver)
     leaderboard = LeaderboardHelper(rv_driver)
 
-    quest_helper.sign_out_if_signed_in()
-    login_helper.login_with_credentials(email_text=email, password_text=password)
-    custom_quest.join_custom_quest(quest_code=quest)
+    custom_quest.sign_in_and_join(email, password, quest)
 
     expected = leaderboard.expected_score()
     assert leaderboard.get_score(username, expected_points=expected) == expected, \

@@ -15,6 +15,8 @@ class QuestHelper(BaseHelper):
     trivia_error_message = (By.XPATH, "//p[normalize-space()='Response is incorrect.']")
     # Shown when a signed-out visitor tries to complete an activity
     sign_in_required_modal = (By.XPATH, "//*[normalize-space()='Sign in to complete this activity and track your points.']")
+    # Shown on /find-quest when a signed-out visitor enters a restricted quest's code
+    find_quest_sign_in_prompt = (By.XPATH, "//*[normalize-space()='Sign in to find and access your quest.']")
 
     # Prompt
     prompt_activity_locator = (By.XPATH, "//h4[normalize-space()='Prompt Activity']")
@@ -61,6 +63,9 @@ class QuestHelper(BaseHelper):
 
     def is_sign_in_required_modal_visible(self):
         return self.is_visible(self.sign_in_required_modal, custom_timeout=10)
+
+    def is_find_quest_sign_in_prompt_visible(self, custom_timeout=10):
+        return self.is_visible(self.find_quest_sign_in_prompt, custom_timeout=custom_timeout)
 
     def complete_trivia_activity(self, response):
         print("click and complete trivia activity")

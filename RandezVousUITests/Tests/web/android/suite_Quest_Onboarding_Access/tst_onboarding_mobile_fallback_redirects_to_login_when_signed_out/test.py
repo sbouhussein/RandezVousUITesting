@@ -1,12 +1,11 @@
 from urllib.parse import urlparse, parse_qs, unquote
 
-from helpers.web.onboarding_helper import OnboardingPageHelper
+from helpers.web import OnboardingPageHelper
 from helpers.web.quest_test_data import BASE_URL, ORG_ID, RESTRICTED_QUEST_ID, onboarding_url, quest_url
 
 
 def test_onboarding_mobile_fallback_redirects_to_login_when_signed_out(mobile_chrome_driver):
-    """QUEST_ONBOARDING_UX.md row 3: Open in App fallback now routes a signed-out visitor
-    to /login instead of the raw quest page."""
+    """The Open in App fallback sends a signed-out visitor to /login."""
     driver = mobile_chrome_driver
     driver.get(onboarding_url(RESTRICTED_QUEST_ID))
 

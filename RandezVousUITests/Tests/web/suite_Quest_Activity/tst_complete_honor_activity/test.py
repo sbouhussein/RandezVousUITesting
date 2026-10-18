@@ -1,7 +1,6 @@
 import pytest
 
-from helpers.web.homepage_helper import HomepageHelper
-from helpers.web.quest_helper import QuestHelper
+from helpers.web import HomepageHelper, QuestHelper
 from helpers.web.quest_test_data import ACTIVITY_QUEST_ID, TEST_USER_EMAIL, TEST_USER_PASSWORD
 
 

@@ -1,20 +1,4 @@
-"""Signs a browser in as the fabricated Google-provider test user, without Google's OAuth.
-
-Driving a real Google sign-in through Selenium isn't viable (Google blocks webdriver browsers), and
-rvsite's `google_hd` quest policy (backend/routes/quests.js) only accepts a user whose Firebase Auth
-record has a `google.com` provider entry on an allowed domain. seed_qa_web_fixtures.py fabricates such
-a user in randezvous-qa; this helper signs in as them:
-
-  1. mint a custom token for the user's UID (Admin SDK),
-  2. in the page, exchange it for an ID token (Identity Toolkit) and POST it to /api/auth/session-login
-     through the app's own apiClient, which sets the same httpOnly session cookie a real login does.
-
-rvsite's useAuth derives "signed in" from that cookie (via /api/auth/status), so a reload afterwards
-puts the app in the signed-in state. In dev the backend skips App Check, so no token is needed.
-
-This proves the backend's domain check and the frontend's success rendering. It does NOT prove real
-Google consent-screen behavior (hosted-domain restriction at Google's login page); that can't be
-automated."""
+"""Signs a browser in as the fabricated Google-provider user by minting a custom token and POSTing the ID token to /api/auth/session-login; it doesn't prove real Google consent-screen behavior."""
 import time
 
 import firebase_admin
@@ -25,8 +9,7 @@ from helpers.web.quest_test_data import GOOGLE_DOMAIN_UID
 
 QA_PROJECT = "randezvous-qa"
 
-# Runs in the page. Reuses the app's own firebaseConfig (for the web API key) and apiClient (base URL,
-# credentials, headers) so the session-login call is exactly what the real login flow sends.
+# Runs in the page, reusing the app's firebaseConfig and apiClient so the call matches a real login.
 _SIGN_IN_SCRIPT = """
 const customToken = arguments[0];
 const done = arguments[arguments.length - 1];
@@ -51,8 +34,7 @@ const done = arguments[arguments.length - 1];
 
 class GoogleIdentityHelper(BaseHelper):
     def sign_in(self, uid=GOOGLE_DOMAIN_UID):
-        """Signs the current browser session in as `uid` and reloads. The driver must already be on the
-        app's origin (any page of it). Raises RuntimeError if the bridge fails."""
+        """Signs the browser in as `uid` and reloads; the driver must already be on the app's origin."""
         project = firebase_admin.get_app().project_id
         if project != QA_PROJECT:
             raise RuntimeError(f"Refusing to mint a custom token: Admin app is on '{project}', not '{QA_PROJECT}'.")

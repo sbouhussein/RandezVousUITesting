@@ -118,6 +118,11 @@ class CustomQuestPage(BaseHelper):
     # Shown in place of the "Complete in Quest" button when the user is out of range.
     out_of_range_message = (AppiumBy.IOS_PREDICATE, 'label CONTAINS "away from being able to complete this activity"')
 
+    def sign_in_and_join(self, email, password, quest_code="test-automation-quest"):
+        QuestHelper(self.driver).sign_out_if_signed_in()
+        LoginPageHelper(self.driver).login_with_credentials(email, password)
+        self.join_custom_quest(quest_code)
+
     def join_custom_quest(self, quest_code):
         quest_helper = QuestHelper(self.driver)
 
@@ -356,16 +361,24 @@ class CustomQuestPage(BaseHelper):
             EC.presence_of_element_located((AppiumBy.ACCESSIBILITY_ID, "PXGGridLayout-Info"))
         )
 
+        # With an element, mobile: tap's x/y are offsets within it, so tap its center (absolute coordinates hit another cell).
         rect = first_photo.rect
-        x = rect['x'] + (rect['width'] / 2)
-        y = rect['y'] + (rect['height'] / 2)
+        x = rect['width'] / 2
+        y = rect['height'] / 2
 
         print(f"Tapping most recent photo at x={x}, y={y}")
         self.driver.execute_script('mobile: tap', {
             'x': x,
             'y': y,
-            'element': first_photo
+            'element': first_photo.id
         })
+
+    def dismiss_quest_completion_overlay(self):
+        """Closes the quest-completion overlay by tapping its dimmed area (it has no close button), then goes back."""
+        print("Dismissing the quest completion overlay")
+        size = self.driver.get_window_size()
+        self.driver.execute_script("mobile: tap", {"x": size["width"] / 2, "y": size["height"] * 0.84})
+        self.click_back()
 
     def click_send_button(self):
         self.wait.until(EC.visibility_of_element_located(self.send_button)).click()

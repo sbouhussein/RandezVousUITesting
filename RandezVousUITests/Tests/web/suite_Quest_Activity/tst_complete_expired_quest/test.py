@@ -5,8 +5,7 @@ import requests
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from helpers.web.homepage_helper import HomepageHelper
-from helpers.web.quest_helper import QuestHelper
+from helpers.web import HomepageHelper, QuestHelper
 from helpers.web.quest_test_data import (
     BACKEND_URL, BASE_URL, EXPIRED_QUEST_ID, ORG_ID, TEST_USER_EMAIL, TEST_USER_PASSWORD,
 )

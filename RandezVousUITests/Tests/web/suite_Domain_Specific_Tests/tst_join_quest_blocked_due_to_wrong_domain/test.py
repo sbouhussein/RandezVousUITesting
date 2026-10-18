@@ -5,8 +5,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from helpers.web.homepage_helper import HomepageHelper
-from helpers.web.quest_helper import QuestHelper
+from helpers.web import HomepageHelper, QuestHelper
 from helpers.web.quest_test_data import BASE_URL, RESTRICTED_QUEST_ID, WRONG_DOMAIN_EMAIL, WRONG_DOMAIN_PASSWORD
 
 

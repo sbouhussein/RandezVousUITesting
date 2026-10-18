@@ -1,7 +1,7 @@
 import pytest
 
 from helpers.ios.device_helper import RV_BUNDLE_ID
-from helpers.ios.login_page_helper import WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
+from helpers.ios import WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
 
 QUEST_URL = "https://www.randezvous.com/quest/organization/test-org/test-automation-quest/onboarding"
 

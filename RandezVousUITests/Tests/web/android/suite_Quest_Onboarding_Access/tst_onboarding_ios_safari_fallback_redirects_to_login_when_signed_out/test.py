@@ -1,19 +1,12 @@
 from urllib.parse import urlparse, parse_qs, unquote
 
-from helpers.ios.device_helper import DeviceHelper
-from helpers.web.onboarding_helper import OnboardingPageHelper
+from helpers.ios import DeviceHelper
+from helpers.web import OnboardingPageHelper
 from helpers.web.quest_test_data import BASE_URL, ORG_ID, RESTRICTED_QUEST_ID, onboarding_url, quest_url
 
 
 def test_onboarding_ios_safari_fallback_redirects_to_login_when_signed_out(safari_driver):
-    """QUEST_ONBOARDING_UX.md row 3, iOS path: mobile_chrome_driver's Android user-agent trick
-    (see its docstring in conftest.py) can only verify the fallback href, since Android's
-    "Open in App" link resolves straight to the fallback URL. iOS instead fires the deep link
-    and only navigates to the fallback from openAppOrFallback's 1500ms no-blur timeout
-    (src/utils/appLinks.js) -- that branch needs a real iOS Safari to exercise, hence
-    safari_driver instead of mobile_chrome_driver. Requires the RV app NOT installed on this
-    simulator, or the deep link succeeds and the fallback never fires -- see
-    test_onboarding_ios_safari_deep_link_opens_app_when_installed for that counterpart."""
+    """iOS only navigates to the fallback after a 1500ms no-blur timeout, so it needs real Safari and the RV app not installed."""
     driver = safari_driver
     DeviceHelper(driver).require_app_installed(installed=False)
 
@@ -21,8 +14,7 @@ def test_onboarding_ios_safari_fallback_redirects_to_login_when_signed_out(safar
     driver.get(start_url)
 
     onboarding = OnboardingPageHelper(driver)
-    # XCUITest Safari sessions start in the NATIVE_APP context -- switch into the
-    # page's WEBVIEW context before any DOM lookup (see BaseHelper.switch_to_webview).
+    # Switch into WEBVIEW before any DOM lookup.
     onboarding.switch_to_webview()
     onboarding.click_open_in_app()
 
