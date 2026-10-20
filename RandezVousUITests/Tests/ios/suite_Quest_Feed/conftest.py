@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 from datetime import timedelta
 from pathlib import Path
@@ -28,9 +29,10 @@ def other_user_cleanup():
 
 
 @pytest.fixture
-def distinct_photo(request, seed_simulator_photos):
-    """Adds fixtures/private_photo.png to the simulator as the newest image and returns its path."""
-    path = str(Path(__file__).resolve().parents[3] / "fixtures" / "private_photo.png")
+def distinct_photo(request, seed_simulator_photos, tmp_path):
+    """Adds a fresh copy of fixtures/private_photo.png as the newest image (the picker sorts by file creation date) and returns its path."""
+    path = str(tmp_path / "private_photo.png")
+    shutil.copyfile(Path(__file__).resolve().parents[3] / "fixtures" / "private_photo.png", path)
     subprocess.run(["xcrun", "simctl", "addmedia", request.config.getoption("--udid"), path],
                    capture_output=True, text=True, check=True)
     return path

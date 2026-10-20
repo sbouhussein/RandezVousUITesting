@@ -173,11 +173,15 @@ RandezVousUITesting/
     ├── fixtures/                      # Static files, e.g. sample_photo.png seeded into the iOS simulator
     │
     ├── helpers/
-    │   ├── common/                    # Shared by iOS + Android (DeviceHelperBase)
+    │   ├── common/                    # Shared: DeviceHelperBase, access_data_helper (bans/grants via the Admin SDK)
     │   ├── android/                   # Android device helper
     │   ├── ios/                       # Page Object Model classes for Appium/XCUITest
     │   │   ├── base_helper.py
     │   │   ├── custom_quest_helper.py
+    │   │   ├── access_helper.py       # Join attempts that get refused (bans, ended, domain)
+    │   │   ├── feed_helper.py         # Quest Feed screen
+    │   │   ├── photo_upload_helper.py # Photo upload screen (Public / Admin Only, caption)
+    │   │   ├── feed_data_helper.py    # Admin-SDK feed/photo/Storage data for the feed tests
     │   │   ├── firebase_cleanup_helper.py
     │   │   └── ...
     │   └── web/                       # Page Object Model classes for Selenium
@@ -185,13 +189,14 @@ RandezVousUITesting/
     │       ├── homepage_helper.py     # Login (retries a stalled Firebase sign-in), find-quest
     │       ├── quest_helper.py
     │       ├── quest_test_data.py     # Single source of truth: ports, org, quest IDs, test accounts
-    │       ├── google_identity_helper.py  # Signs in as a fabricated Google-provider QA user (custom token)
-    │       └── firebase_test_data_helper.py  # Bans/grants/etc. set directly via the Admin SDK
+    │       └── google_identity_helper.py  # Signs in as a fabricated Google-provider QA user (custom token)
     │
     └── Tests/
         ├── ios/
         │   ├── suite_Custom_Quest_Entry_Point/
-        │   └── suite_Quest_Activity/
+        │   ├── suite_Quest_Access_Restrictions/   # Bans and domain-restricted quests
+        │   ├── suite_Quest_Activity/
+        │   └── suite_Quest_Feed/                  # Quest Feed posts and photo visibility
         └── web/
             ├── android/               # Quest-onboarding suite (only one test uses the Android emulator)
             │   └── suite_Quest_Onboarding_Access/
@@ -201,6 +206,21 @@ RandezVousUITesting/
 ```
 
 Each test lives at `Tests/<platform>/suite_<feature_area>/tst_<what_it_tests>/test.py`.
+
+### iOS suites
+
+| Suite | Covers |
+|---|---|
+| `suite_Custom_Quest_Entry_Point` | Joining a custom quest (code, URL, dashboard, guest username), and refusal when the quest has ended |
+| `suite_Quest_Activity` | Completing each activity type and whole quests, with leaderboard score checks |
+| `suite_Quest_Feed` | A Public photo posts to the feed (and the Public / Admin Only toggle), an Admin Only photo stays out of it and can't be read by a non-admin, and a free-form post |
+| `suite_Quest_Access_Restrictions` | Refused joins from a quest or org-wide ban, a ban held under another uid with the same email, and bans that don't apply (other quest, expired); domain-restricted quests for a guest and for email/password accounts |
+
+Notes:
+
+- **Feed tests** find their own post by a unique caption because the shared feed holds many posts. They delete only what the test account authored, and the private-photo test also deletes that account's stored photos. Its Storage read check takes the QA web API key from `.env.qa` in the rvsite checkout (`WEB_APP_PATH`).
+- **Access tests** write bans straight to Firestore (`helpers/common/access_data_helper.py`) and remove them afterwards, pass or fail.
+- **Not automated on iOS:** joining a domain-restricted quest as a real Google user (correct or wrong domain). The app decides from the account's `google.com` provider and Google's sign-in sheet can't be driven, so the web suite covers it with fabricated Google users. The "Switch Account (Sign Out)" button starts that Google sign-in, so tests only check it is offered.
 
 ---
 
@@ -229,7 +249,7 @@ One test function per file, named `test_<what_it_tests>`. Take a driver fixture 
 
 ### 3. Add helpers for new screens
 
-Create a new file in `helpers/ios/` or `helpers/web/` named after the screen or feature: `<screen_name>_helper.py`.
+Create a new file in `helpers/ios/` or `helpers/web/` named after the screen or feature: `<screen_name>_helper.py`. Add its classes to that package's `__init__.py` so tests can import them with `from helpers.ios import ...` (or `helpers.web`).
 
 ---
 

@@ -6,6 +6,8 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+from helpers.ios.ios_test_data import TEST_USERNAME
+
 
 class LeaderboardHelper:
     """Custom-quest leaderboard (CustomLeaderboardView); each row is one element labeled like "Rank 2, OmarTesting, 25 points", so assert on username and points, not rank."""
@@ -39,6 +41,18 @@ class LeaderboardHelper:
         self.open()
         row = self.get_row(username, points=expected_points, timeout=timeout)
         return row["points"] if row else None
+
+    def score_check(self, username=TEST_USERNAME, **scoring):
+        """(expected, actual) points for `username`, where `scoring` is passed to expected_score."""
+        expected = self.expected_score(**scoring)
+        return expected, self.get_score(username, expected_points=expected)
+
+    def scores_for(self, username, **scoring):
+        """(expected, every row's points for `username`), for guests whose name repeats across leftover rows."""
+        expected = self.expected_score(**scoring)
+        self.open()
+        self.get_row(username, points=expected)
+        return expected, [r["points"] for r in self.get_rows_for(username)]
 
     def open(self):
         self.wait.until(EC.element_to_be_clickable(self.open_button)).click()

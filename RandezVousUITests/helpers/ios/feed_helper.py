@@ -69,6 +69,13 @@ class FeedHelper(BaseHelper):
         posts = self.get_posts()
         return posts[0] if posts else None
 
+    def peek_latest_post(self):
+        """Opens the feed, reads its newest post and closes it again."""
+        self.open_feed()
+        post = self.get_latest_post()
+        self.close_feed()
+        return post
+
     def compose_post(self, text):
         """Posts a free-form message from the feed's New post sheet and waits for the sheet to close."""
         self.wait.until(EC.element_to_be_clickable(self.new_post_button)).click()

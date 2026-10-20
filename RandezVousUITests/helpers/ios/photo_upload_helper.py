@@ -34,6 +34,11 @@ class PhotoUploadHelper(CustomQuestPage):
     def get_visibility_text(self):
         return self.wait.until(EC.visibility_of_element_located(self.visibility_text)).get_attribute("label")
 
+    def visibility_state(self):
+        """(selected visibility, whether the caption field is offered), e.g. ("Public", True)."""
+        selected = self.ADMIN_ONLY if "admin of" in self.get_visibility_text() else self.PUBLIC
+        return selected, self.is_caption_field_visible()
+
     def is_caption_field_visible(self):
         try:
             return self.driver.find_element(*self.caption_button).is_displayed()

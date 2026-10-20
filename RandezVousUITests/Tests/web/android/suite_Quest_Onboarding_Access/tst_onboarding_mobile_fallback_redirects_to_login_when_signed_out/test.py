@@ -1,20 +1,11 @@
-from urllib.parse import urlparse, parse_qs, unquote
-
 from helpers.web import OnboardingPageHelper
-from helpers.web.quest_test_data import BASE_URL, ORG_ID, RESTRICTED_QUEST_ID, onboarding_url, quest_url
+from helpers.web.quest_test_data import BASE_URL, RESTRICTED_QUEST_ID, fallback_goto, onboarding_url, quest_path
 
 
 def test_onboarding_mobile_fallback_redirects_to_login_when_signed_out(mobile_chrome_driver):
     """The Open in App fallback sends a signed-out visitor to /login."""
-    driver = mobile_chrome_driver
-    driver.get(onboarding_url(RESTRICTED_QUEST_ID))
+    mobile_chrome_driver.get(onboarding_url(RESTRICTED_QUEST_ID))
+    href = OnboardingPageHelper(mobile_chrome_driver).get_open_in_app_href()
 
-    onboarding = OnboardingPageHelper(driver)
-    href = onboarding.get_open_in_app_href()
-
-    parsed = urlparse(href)
     assert href.startswith(f"{BASE_URL}/login?"), f"Expected a /login fallback, got: {href}"
-    goto = unquote(parse_qs(parsed.query)["goto"][0])
-    assert goto == quest_url(RESTRICTED_QUEST_ID, org_id=ORG_ID).removeprefix(BASE_URL), (
-        f"Expected goto to point back at the restricted quest, got: {goto}"
-    )
+    assert fallback_goto(href) == quest_path(RESTRICTED_QUEST_ID), f"Expected goto to point back at the quest: {href}"

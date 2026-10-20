@@ -1,21 +1,14 @@
 import pytest
+
 from helpers.ios import CustomQuestPage, LeaderboardHelper
+from helpers.ios.ios_test_data import TEST_EMAIL
 
 
-@pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
+@pytest.mark.cleanup(type="email", value=TEST_EMAIL)
 def test_photo_based_activity(rv_driver):
-    email = "oalson123@gmail.com"
-    password = "OmarTest123"
-    username = "OmarTesting"
-    quest = "test-automation-quest"
-    activity = "Photo"
+    quest = CustomQuestPage(rv_driver)
+    quest.sign_in_and_join()
+    quest.complete_photo_activity("Photo")
 
-    custom_quest = CustomQuestPage(rv_driver)
-    leaderboard = LeaderboardHelper(rv_driver)
-
-    custom_quest.sign_in_and_join(email, password, quest)
-    custom_quest.complete_photo_activity(activity)
-
-    expected = leaderboard.expected_score(activities_completed=1)
-    assert leaderboard.get_score(username, expected_points=expected) == expected, \
-        f"'{username}' should have {expected} points on the leaderboard after the activity"
+    expected, actual = LeaderboardHelper(rv_driver).score_check(activities_completed=1)
+    assert actual == expected, f"Expected {expected} points on the leaderboard after the activity, got {actual}"

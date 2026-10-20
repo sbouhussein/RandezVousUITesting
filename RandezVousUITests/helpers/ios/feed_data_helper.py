@@ -4,26 +4,22 @@ import os
 import time
 import urllib.parse
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import firebase_admin
 import requests
 from firebase_admin import auth, firestore, storage
 from google.cloud.firestore_v1.base_query import FieldFilter
 
+from helpers.ios.ios_test_data import (  # noqa: F401  (re-exported for the feed tests)
+    OTHER_EMAIL, OTHER_PASSWORD, OTHER_USERNAME, QUEST_ID, TEST_EMAIL, TEST_PASSWORD, TEST_USERNAME,
+)
+
 QA_PROJECT = "randezvous-qa"
 QA_BUCKET = "randezvous-qa.firebasestorage.app"
 ORG_ID = "test-org"
-QUEST_ID = "test-automation-quest"
 # The Photo activity of test-automation-quest (feed imagePost docs and the user's photo arrays use this key).
 PHOTO_ACTIVITY_KEY = f"{QUEST_ID}-1001"
-TEST_EMAIL = "oalson123@gmail.com"
-TEST_USERNAME = "OmarTesting"
-TEST_PASSWORD = "OmarTest123"
-# A second, unrelated QA account (seeded for the web suite; has a username) for "can another user see it" checks.
-OTHER_EMAIL = "test_user@randezvous.com"
-OTHER_PASSWORD = "OmarTest123"
-OTHER_USERNAME = "webrightdomain"
 
 
 def unique_text(prefix="ui-test"):
@@ -174,3 +170,26 @@ def delete_stored_photos(email=TEST_EMAIL):
             blob.delete()
             deleted += 1
     return deleted
+
+
+def reset_photo_state(email=TEST_EMAIL):
+    """Start-of-test clean slate: none of `email`'s feed posts or stored Photo files. Returns (posts, files) removed."""
+    removed = delete_user_feed_posts(email), delete_stored_photos(email)
+    print(f"Cleared {removed[0]} feed post(s) and {removed[1]} stored photo(s) for {email}")
+    return removed
+
+
+def stored_photo_matches(expected_colors, private=True, email=TEST_EMAIL, tolerance=40):
+    """True if the stored photo's lower-left and upper-right quarters are `expected_colors` (JPEG shifts colors a bit)."""
+    photo = get_stored_photo(email, private)
+    if photo is None:
+        return False
+    points = [(photo.width // 4, photo.height * 3 // 4), (photo.width * 3 // 4, photo.height // 4)]
+    return all(all(abs(a - b) <= tolerance for a, b in zip(photo.getpixel(pt), color))
+               for pt, color in zip(points, expected_colors))
+
+
+def private_photo_read_statuses(owner_email, other_email):
+    """Storage read status of the owner's private photo as (owner, other); expect (200, 403)."""
+    path = photo_storage_path(owner_email, private=True)
+    return storage_read_status(owner_email, path), storage_read_status(other_email, path)

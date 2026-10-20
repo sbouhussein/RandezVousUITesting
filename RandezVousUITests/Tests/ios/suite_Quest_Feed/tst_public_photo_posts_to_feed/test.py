@@ -1,10 +1,10 @@
 import pytest
 
 from helpers.ios import CustomQuestPage, FeedHelper, PhotoUploadHelper
-from helpers.ios.feed_data_helper import (
-    PHOTO_ACTIVITY_KEY, TEST_EMAIL, TEST_PASSWORD, TEST_USERNAME,
-    photo_visibility, unique_text, utc_now, wait_for_feed_post,
-)
+from helpers.ios.feed_data_helper import PHOTO_ACTIVITY_KEY, photo_visibility, unique_text, utc_now, wait_for_feed_post
+from helpers.ios.ios_test_data import TEST_EMAIL, TEST_USERNAME
+
+PUBLIC, ADMIN_ONLY = PhotoUploadHelper.PUBLIC, PhotoUploadHelper.ADMIN_ONLY
 
 
 @pytest.mark.cleanup(type="email", value=TEST_EMAIL)
@@ -12,23 +12,15 @@ def test_public_photo_posts_to_feed(rv_driver):
     """The visibility toggle swaps the caption field, and a Public photo with a caption becomes a feed post."""
     caption = unique_text("public-photo")
     started = utc_now()
-
-    CustomQuestPage(rv_driver).sign_in_and_join(TEST_EMAIL, TEST_PASSWORD)
-
+    CustomQuestPage(rv_driver).sign_in_and_join()
     upload = PhotoUploadHelper(rv_driver)
     upload.select_photo()
 
-    assert "everyone on" in upload.get_visibility_text(), f"Public should be the default: {upload.get_visibility_text()}"
-    assert upload.is_caption_field_visible(), "A public upload to a quest with a feed should offer a caption"
-
-    upload.select_visibility(PhotoUploadHelper.ADMIN_ONLY)
-    assert "admin of" in upload.get_visibility_text(), f"Admin Only should limit visibility: {upload.get_visibility_text()}"
-    assert not upload.is_caption_field_visible(), "A private upload makes no feed post, so there should be no caption field"
-
-    upload.select_visibility(PhotoUploadHelper.PUBLIC)
-    assert "everyone on" in upload.get_visibility_text(), "Switching back to Public should restore its visibility text"
-    assert upload.is_caption_field_visible(), "Switching back to Public should bring the caption field back"
-
+    assert upload.visibility_state() == (PUBLIC, True), "Public with a caption field should be the default"
+    upload.select_visibility(ADMIN_ONLY)
+    assert upload.visibility_state() == (ADMIN_ONLY, False), "Admin Only should hide the caption (no feed post)"
+    upload.select_visibility(PUBLIC)
+    assert upload.visibility_state() == (PUBLIC, True), "Switching back should restore Public and the caption field"
     upload.add_caption(caption)
     upload.submit()
     upload.finish_upload()

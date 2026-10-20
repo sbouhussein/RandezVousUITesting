@@ -1,19 +1,13 @@
 import pytest
 
 from helpers.web import HomepageHelper, QuestHelper
-from helpers.web.quest_test_data import (
-    ACTIVITY_QUEST_ID, ACTIVITY_QUEST_LOCATION, TEST_USER_EMAIL, TEST_USER_PASSWORD,
-)
+from helpers.web.quest_test_data import ACTIVITY_QUEST_ID, TEST_USER_EMAIL, ACTIVITY_QUEST_LOCATION
 
 
 @pytest.mark.cleanup(type="email", value=TEST_USER_EMAIL)
 def test_complete_location_activity(desktop_safari_driver):
-    nav = HomepageHelper(desktop_safari_driver)
+    HomepageHelper(desktop_safari_driver).sign_in_and_find_quest(ACTIVITY_QUEST_ID)
     quest = QuestHelper(desktop_safari_driver)
-
-    nav.login(TEST_USER_EMAIL, TEST_USER_PASSWORD)
-    nav.find_quest(ACTIVITY_QUEST_ID)
-
     quest.mock_geo_location(*ACTIVITY_QUEST_LOCATION)
     quest.complete_location_activity()
 

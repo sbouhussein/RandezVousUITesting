@@ -6,6 +6,7 @@ from helpers.ios.base_helper import BaseHelper
 from helpers.ios.login_page_helper import LoginPageHelper
 from helpers.ios.profile_helper import ProfileHelper
 from helpers.ios.device_helper import DeviceHelper
+from helpers.ios.ios_test_data import QUEST_ID, TEST_EMAIL, TEST_PASSWORD
 from helpers.ios.system_prompt_helper import SystemPromptHelper
 
 
@@ -118,7 +119,7 @@ class CustomQuestPage(BaseHelper):
     # Shown in place of the "Complete in Quest" button when the user is out of range.
     out_of_range_message = (AppiumBy.IOS_PREDICATE, 'label CONTAINS "away from being able to complete this activity"')
 
-    def sign_in_and_join(self, email, password, quest_code="test-automation-quest"):
+    def sign_in_and_join(self, email=TEST_EMAIL, password=TEST_PASSWORD, quest_code=QUEST_ID):
         QuestHelper(self.driver).sign_out_if_signed_in()
         LoginPageHelper(self.driver).login_with_credentials(email, password)
         self.join_custom_quest(quest_code)

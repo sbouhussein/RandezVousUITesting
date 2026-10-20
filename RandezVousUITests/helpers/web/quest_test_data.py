@@ -1,4 +1,5 @@
 """Single source of truth for the randezvous-qa fixtures, credentials and ports the web suites use, plus URL builders."""
+from urllib.parse import parse_qs, unquote, urlparse
 
 # rvsite's QA dev server (`npm start`: Vite --mode qa on 5174 + backend on 3000, both against randezvous-qa).
 WEB_PORT = "5174"
@@ -53,3 +54,13 @@ def feed_url(qid, org_id=ORG_ID, base_url=BASE_URL):
 
 def quest_url(qid, org_id=ORG_ID, base_url=BASE_URL):
     return f"{base_url}/quest/organization/{org_id}/{qid}"
+
+
+def quest_path(qid, org_id=ORG_ID):
+    return f"/quest/organization/{org_id}/{qid}"
+
+
+def fallback_goto(url):
+    """The `goto` query parameter of a /login fallback URL (the page to return to after signing in), or None."""
+    goto = parse_qs(urlparse(url).query).get("goto")
+    return unquote(goto[0]) if goto else None
