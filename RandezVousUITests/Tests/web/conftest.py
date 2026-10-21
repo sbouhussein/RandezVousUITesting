@@ -1,6 +1,6 @@
 import pytest
 
-from helpers.web.firebase_test_data_helper import ban_user_from_quest, clear_stale_grant, unban_user
+from helpers.common.access_data_helper import ban_user_from_quest, clear_stale_grant, unban_user
 
 
 @pytest.fixture

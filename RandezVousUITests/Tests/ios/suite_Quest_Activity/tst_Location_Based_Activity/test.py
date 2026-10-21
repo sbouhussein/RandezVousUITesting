@@ -1,25 +1,15 @@
 import pytest
 
-from helpers.ios.custom_quest_helper import CustomQuestPage, QuestHelper
-from helpers.ios.login_page_helper import LoginPageHelper
-from helpers.ios.device_helper import DeviceHelper
+from helpers.ios import CustomQuestPage, LeaderboardHelper, DeviceHelper
+from helpers.ios.ios_test_data import TEST_EMAIL
 
 
-@pytest.mark.cleanup(type="email", value="oalson123@gmail.com")
+@pytest.mark.cleanup(type="email", value=TEST_EMAIL)
 def test_location_based_activity(rv_driver):
-    email = "oalson123@gmail.com"
-    password = "OmarTest123"
-    quest = "test-automation-quest"
-    activity = "Location"
+    quest = CustomQuestPage(rv_driver)
+    quest.sign_in_and_join()
+    DeviceHelper(rv_driver).set_simulator_location()
+    quest.complete_location_activity("Location")
 
-    device_helper = DeviceHelper(rv_driver)
-    custom_quest = CustomQuestPage(rv_driver)
-    login_helper = LoginPageHelper(rv_driver)
-    quest_helper = QuestHelper(rv_driver)
-
-    quest_helper.sign_out_if_signed_in()
-    login_helper.login_with_credentials(email, password)
-    custom_quest.join_custom_quest(quest)
-    device_helper.set_simulator_location()
-    custom_quest.complete_location_activity(activity)
-
+    expected, actual = LeaderboardHelper(rv_driver).score_check(activities_completed=1)
+    assert actual == expected, f"Expected {expected} points on the leaderboard after the activity, got {actual}"

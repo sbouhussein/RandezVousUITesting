@@ -1,16 +1,10 @@
 from helpers.ios.device_helper import DeviceHelper, RV_BUNDLE_ID
-from helpers.web.onboarding_helper import OnboardingPageHelper
+from helpers.web import OnboardingPageHelper
 from helpers.web.quest_test_data import RESTRICTED_QUEST_ID, onboarding_url
 
 
 def test_onboarding_ios_safari_deep_link_opens_app_when_installed(safari_driver):
-    """QUEST_ONBOARDING_UX.md row 3, iOS path -- counterpart to
-    test_onboarding_ios_safari_fallback_redirects_to_login_when_signed_out. Requires the RV
-    app installed on this simulator, or the deep link is never handled and this instead hits
-    the fallback branch that other test covers. openAppOrFallback (appLinks.js) never
-    navigates away from the quest page itself when the deep link succeeds -- the only
-    observable signal is the RV app taking the foreground, so we assert on
-    query_app_state rather than a URL change."""
+    """The deep link brings the installed RV app to the foreground; needs the app installed."""
     driver = safari_driver
     device = DeviceHelper(driver)
     device.require_app_installed(installed=True)
@@ -19,13 +13,11 @@ def test_onboarding_ios_safari_deep_link_opens_app_when_installed(safari_driver)
     driver.get(start_url)
 
     onboarding = OnboardingPageHelper(driver)
-    # XCUITest Safari sessions start in the NATIVE_APP context -- switch into the
-    # page's WEBVIEW context before any DOM lookup (see BaseHelper.switch_to_webview).
+    # Switch into WEBVIEW before any DOM lookup.
     onboarding.switch_to_webview()
     onboarding.click_open_in_app()
 
-    # Cold-launching the app behind SpringBoard's "Open in RandezVous?" prompt can take well over the
-    # helper's 10s default on a loaded simulator.
+    # A cold launch behind SpringBoard's prompt can outlast the helper's 10s default.
     state = device.wait_for_app_foreground(timeout=40)
     assert state == 4, (
         f"Expected the deep link to hand off to the installed RV app (query_app_state == 4), got: {state}"

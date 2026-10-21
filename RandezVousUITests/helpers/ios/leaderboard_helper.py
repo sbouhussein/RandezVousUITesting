@@ -6,19 +6,11 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+from helpers.ios.ios_test_data import TEST_USERNAME
+
 
 class LeaderboardHelper:
-    """Custom-quest leaderboard (CustomLeaderboardView). Opened from an active
-    quest's detail screen via its "Leaderboard" button.
-
-    Every row is ONE accessibility element -- LeaderboardRow hides its children
-    and exposes a single combined label, so username/score can't be read from
-    child text elements:
-        "Rank 2, OmarTesting, 25 points"
-        "Unranked, OmarTesting, 25 points"       (backfilled/pinned row)
-        "Rank 1, Team Name, team of 3, 90 points"
-    Ranks are shared on ties and depend on every other participant in the org,
-    so prefer asserting on username + points over rank."""
+    """Custom-quest leaderboard (CustomLeaderboardView); each row is one element labeled like "Rank 2, OmarTesting, 25 points", so assert on username and points, not rank."""
 
     open_button = (AppiumBy.IOS_PREDICATE, "label == 'Leaderboard'")
     nav_bar = (AppiumBy.IOS_CLASS_CHAIN, '**/XCUIElementTypeNavigationBar[`name == "Leaderboard"`]')
@@ -29,9 +21,7 @@ class LeaderboardHelper:
 
     _ROW_LABEL = re.compile(r"^(?:Rank (\d+)|Unranked), (.+?)(?:, team of (\d+))?, (\d+) points$")
 
-    # Custom-quest scoring (functions/scoring.js). 100/activity is the default
-    # when the quest has no pointValues override; the completion bonus is paid
-    # once when every activity is done.
+    # Scoring (functions/scoring.js): 100 per activity unless pointValues overrides it, plus a completion bonus.
     STARTING_POINTS = 25
     POINTS_PER_ACTIVITY = 100
     COMPLETION_BONUS = 250
@@ -42,19 +32,27 @@ class LeaderboardHelper:
 
     @classmethod
     def expected_score(cls, activities_completed=0, quest_completed=False):
-        """Score a user should have on the leaderboard after joining and
-        completing `activities_completed` activities."""
+        """The score a user should have after joining and completing `activities_completed` activities."""
         score = cls.STARTING_POINTS + activities_completed * cls.POINTS_PER_ACTIVITY
         return score + cls.COMPLETION_BONUS if quest_completed else score
 
     def get_score(self, username, expected_points=None, timeout=20):
-        """Opens the leaderboard from the quest screen and returns `username`'s
-        points, or None if they never appear. Pass `expected_points` to wait
-        for server-side scoring to land; on timeout the last score seen is
-        returned so the caller's assertion shows the actual value."""
+        """Opens the leaderboard and returns `username`'s points, or None; pass `expected_points` to wait for scoring."""
         self.open()
         row = self.get_row(username, points=expected_points, timeout=timeout)
         return row["points"] if row else None
+
+    def score_check(self, username=TEST_USERNAME, **scoring):
+        """(expected, actual) points for `username`, where `scoring` is passed to expected_score."""
+        expected = self.expected_score(**scoring)
+        return expected, self.get_score(username, expected_points=expected)
+
+    def scores_for(self, username, **scoring):
+        """(expected, every row's points for `username`), for guests whose name repeats across leftover rows."""
+        expected = self.expected_score(**scoring)
+        self.open()
+        self.get_row(username, points=expected)
+        return expected, [r["points"] for r in self.get_rows_for(username)]
 
     def open(self):
         self.wait.until(EC.element_to_be_clickable(self.open_button)).click()
@@ -76,8 +74,7 @@ class LeaderboardHelper:
             return False
 
     def tap_find_me(self):
-        """Scrolls to my own row. The button only exists when my row is in the
-        list and not pinned to the bottom."""
+        """Scrolls to my own row; the button only exists when my row isn't pinned to the bottom."""
         self.wait.until(EC.element_to_be_clickable(self.find_me_button)).click()
 
     def is_find_me_displayed(self):
@@ -101,8 +98,7 @@ class LeaderboardHelper:
         }
 
     def get_visible_rows(self):
-        """Parsed rows currently rendered. The list is lazy, so rows scrolled
-        far off-screen are not included."""
+        """Parsed rows currently rendered; the list is lazy, so off-screen rows are missing."""
         rows = []
         for element in self.driver.find_elements(*self.row):
             parsed = self.parse_row_label(element.get_attribute("label"))
@@ -114,15 +110,7 @@ class LeaderboardHelper:
         return [r for r in self.get_visible_rows() if r["username"] == username]
 
     def get_row(self, username, points=None, timeout=20):
-        """First row for `username`, or None if it never shows up. Rows load
-        from live Firestore listeners after the screen opens, so poll; if my
-        own row isn't rendered yet, Find Me scrolls it into view.
-
-        Scoring is applied server-side after an activity is submitted, so pass
-        `points` to keep polling until the row shows that score; on timeout the
-        last row seen is returned so the caller's assertion reports the actual
-        value. Usernames can repeat (e.g. several 'AutomatedTester' guests) --
-        use get_rows_for to see all of them."""
+        """First row for `username`, polling until it appears (and shows `points` if given); use get_rows_for for duplicate usernames."""
         deadline = time.monotonic() + timeout
         tapped_find_me = False
         last_seen = None

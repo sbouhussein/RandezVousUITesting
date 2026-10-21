@@ -1,25 +1,14 @@
 import pytest
 
-from helpers.ios.custom_quest_helper import CustomQuestPage, QuestHelper
-from helpers.ios.login_page_helper import LoginPageHelper, WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
+from helpers.ios import CustomQuestPage, GuestJoinHelper, LoginPageHelper, QuestHelper
+from helpers.ios.ios_test_data import GUEST_USERNAME, QUEST_ID
 
 
-@pytest.mark.cleanup(type="username", value="AutomatedTester")
+@pytest.mark.cleanup(type="username", value=GUEST_USERNAME)
 def test_log_in_with_code_entry_point(rv_driver):
-    driver = rv_driver
-    login_page = LoginPageHelper(driver)
-    custom_quest_helper = CustomQuestPage(driver)
-    welcome = WelcomeToQuestHelper(driver)
-    choose_username = ChooseUsernameHelper(driver)
-    start_adventure = StartAdventureHelper(driver)
-    quest_helper = QuestHelper(driver)
-    quest = "test-automation-quest"
-
-    quest_helper.sign_out_if_signed_in()
-    login_page.click_login_with_code()
-    custom_quest_helper.enter_quest_code(quest)
-    custom_quest_helper.click_find_quest()
-    welcome.click_lets_go()
-    choose_username.enter_username("AutomatedTester")
-    choose_username.click_join_quest()
-    start_adventure.click_start_adventure()
+    QuestHelper(rv_driver).sign_out_if_signed_in()
+    LoginPageHelper(rv_driver).click_login_with_code()
+    quest = CustomQuestPage(rv_driver)
+    quest.enter_quest_code(QUEST_ID)
+    quest.click_find_quest()
+    GuestJoinHelper(rv_driver).finish_onboarding(required=True)

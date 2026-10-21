@@ -3,8 +3,7 @@ from helpers.web.base_helper import BaseHelper
 
 
 class AccessControlHelper(BaseHelper):
-    """Access-denied UI shared by QuestOnboarding, TeamView, and FeedPage: RestrictedBanner, the
-    wrong-domain locked screen, and their "Switch accounts" / "Sign in with Google" remediation buttons."""
+    """Access-denied UI shared by QuestOnboarding, TeamView and FeedPage."""
 
     restricted_banner_title = (By.XPATH, "//p[normalize-space()=\"You're restricted from this quest\"]")
     back_to_quest_link = (By.XPATH, "//a[contains(normalize-space(), 'Back to Quest')]")
