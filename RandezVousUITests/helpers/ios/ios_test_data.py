@@ -1,0 +1,10 @@
+"""Accounts, usernames and quest IDs the iOS tests share (all in randezvous-qa)."""
+QUEST_ID = "test-automation-quest"
+TEST_EMAIL = "oalson123@gmail.com"
+TEST_PASSWORD = "OmarTest123"
+TEST_USERNAME = "OmarTesting"
+GUEST_USERNAME = "AutomatedTester"
+# A second email/password account, on the allowed domain of the restricted quests.
+OTHER_EMAIL = "test_user@randezvous.com"
+OTHER_PASSWORD = "OmarTest123"
+OTHER_USERNAME = "webrightdomain"

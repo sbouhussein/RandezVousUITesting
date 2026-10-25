@@ -1,16 +1,4 @@
-"""Seeds the randezvous-qa fixtures the web UI tests depend on. Idempotent -- safe to re-run;
-every fixture is overwritten to its canonical shape.
-
-    python scripts/firebase/seed_qa_web_fixtures.py
-
-What it creates (all IDs come from RandezVousUITests/helpers/web/quest_test_data.py, the single
-source of truth the tests import):
-  * quests under Organizations/test-org (Firestore doc + activities JSON in Cloud Storage +
-    quest_index entry, listed in the org's privateQids so they stay out of public quest lists)
-  * the email/password test accounts the web tests sign in with (Firebase Auth)
-
-Quest docs are cloned from QA's existing `test-automation-quest` so the schema can't drift from
-what rvsite/the iOS app already read. Refuses to run against any project but randezvous-qa."""
+"""Seeds the randezvous-qa web fixtures (idempotent; QA only): quests cloned from `test-automation-quest` plus the test accounts."""
 import copy
 import datetime
 import json
@@ -45,8 +33,7 @@ RESTRICTED_POLICY = {"type": "google_hd", "allowedDomains": ["randezvous.com"]}
 
 
 def activity(aid, name, method, **extra):
-    """One entry of a quest's activities JSON. `name` is what rvsite renders as the card heading
-    and builds aria-labels from ("Complete {name}"), which the web helpers locate on."""
+    """One entry of a quest's activities JSON; `name` is the card heading the web helpers locate on."""
     entry = {
         "id": aid, "name": name, "description": "", "address": "", "customStartString": "",
         "eligibleValidationMethods": [method], "price": {"value": 0, "unknown": True},
@@ -90,8 +77,7 @@ FIXTURES = [
          activities=[HONOR], policy=RESTRICTED_POLICY),
 ]
 
-# (email, password, username). A username-less account lands on rvsite's "Create Your Username"
-# step after sign-in and never leaves /login, so each account needs one. TEST_USER's already has one.
+# (email, password, username); a username-less account never leaves /login, so each needs one.
 ACCOUNTS = [
     (data.TEST_USER_EMAIL, data.TEST_USER_PASSWORD, None),
     (data.WRONG_DOMAIN_EMAIL, data.WRONG_DOMAIN_PASSWORD, data.WRONG_DOMAIN_USERNAME),
@@ -141,8 +127,7 @@ def seed_account(db, email, password, username):
         user = auth.create_user(email=email, password=password, email_verified=True)
         state = "created"
     if username:
-        # Mirrors POST /api/user/create-username (backend/routes/user.js): lowercase username on
-        # Users/{uid}. merge keeps any fields the backend already wrote on first sign-in.
+        # Mirrors POST /api/user/create-username; merge keeps fields the backend already wrote.
         clash = list(db.collection("Users").where("username", "==", username).limit(1).stream())
         if clash and clash[0].id != user.uid:
             sys.exit(f"Username '{username}' is already taken by another QA user.")
@@ -153,15 +138,7 @@ def seed_account(db, email, password, username):
 
 
 def seed_google_account(db, uid, email, username):
-    """Fabricates a Google-provider user: a Firebase Auth record whose `providerData` has a `google.com`
-    entry for `email`.
-
-    rvsite's google_hd access policy (backend/routes/quests.js) reads that entry and checks its email's
-    domain against the quest's allowed domains; it never re-verifies a live OAuth session. A password
-    account can't satisfy it, and Selenium can't complete a real Google sign-in, so import_users() writes
-    the provider entry directly (QA only -- this script refuses to run against any other project).
-    helpers/web/google_identity_helper.py then signs in as the user with a custom token. Idempotent:
-    import_users upserts by UID."""
+    """Fabricates a Google-provider user (a `google.com` providerData entry) via import_users(); idempotent, QA only."""
     record = auth.ImportUserRecord(
         uid=uid, email=email, email_verified=True, display_name=f"QA {username}",
         provider_data=[auth.UserProvider(uid=f"qa-google-{uid}", provider_id="google.com", email=email,

@@ -3,7 +3,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from helpers.web.quest_helper import QuestHelper
-from helpers.web.quest_test_data import BASE_URL
+from helpers.web.quest_test_data import BASE_URL, TEST_USER_EMAIL, TEST_USER_PASSWORD
 
 
 class HomepageHelper:
@@ -114,6 +114,16 @@ class HomepageHelper:
     def login(self, email, password):
         self.click_login_button()
         self._submit_credentials(email, password)
+
+    def sign_in_and_find_quest(self, quest_code, email=TEST_USER_EMAIL, password=TEST_USER_PASSWORD):
+        self.login(email, password)
+        self.find_quest(quest_code)
+
+    def sign_in_and_open(self, url, email=TEST_USER_EMAIL, password=TEST_USER_PASSWORD):
+        """Signs in, waits until the app treats the session as signed in, then opens `url`."""
+        self.login(email, password)
+        self.wait_until_signed_in()
+        self.driver.get(url)
 
     def wait_until_signed_in(self):
         """Waits for LoginPage's post-sign-in redirect."""
