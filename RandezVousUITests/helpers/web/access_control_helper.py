@@ -15,6 +15,8 @@ class AccessControlHelper(BaseHelper):
         By.XPATH, "//p[contains(normalize-space(), 'requires a @') and contains(., 'You are signed in with @')]"
     )
 
+    ended_banner = (By.XPATH, "//span[contains(normalize-space(), 'This quest ended')]")
+
     # TeamView's isRestrictedTeaser screen (wrong-domain, no ban)
     restricted_quest_heading = (By.XPATH, "//h2[normalize-space()='Restricted Quest']")
     domain_requirement_text = (
@@ -27,6 +29,10 @@ class AccessControlHelper(BaseHelper):
 
     def get_wrong_domain_message(self):
         return self.driver.find_element(*self.wrong_domain_message).text
+
+    def is_quest_ended_banner_visible(self, custom_timeout=None):
+        """QuestOnboarding's 'This quest ended on <date>' banner (ended quests are viewable, not joinable)."""
+        return self.is_visible(self.ended_banner, custom_timeout)
 
     def is_restricted_banner_visible(self, custom_timeout=None):
         """The banned-user RestrictedBanner, regardless of which page rendered it."""

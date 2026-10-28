@@ -294,12 +294,13 @@ class CustomQuestPage(BaseHelper):
     def click_completed_activity_button(self):
         self.wait.until(EC.element_to_be_clickable(self.completed_activity_button)).click()
 
-    def complete_honor_based_activity(self, activity):
+    def complete_honor_based_activity(self, activity, click_back=True):
         self.click_activity(activity)
         self.open_quest_sheet()
         self.click_completed_activity_button()
         self.dismiss_rating_popup_if_present()
-        self.click_back()
+        if click_back:  # off when this is the quest's last activity: the completion screen replaces the page
+            self.click_back()
 
     # Prompt
 
@@ -408,4 +409,6 @@ class CustomQuestPage(BaseHelper):
 
     def click_exit_quest(self):
         self.wait.until(EC.element_to_be_clickable(self.primary_exit_quest_button)).click()
-        self.wait.until(EC.element_to_be_clickable(self.secondary_exit_confirm_button)).click()
+        # Guests leave at once; signed-in accounts get a confirmation sheet.
+        if self.is_visible(self.secondary_exit_confirm_button, custom_timeout=3):
+            self.click(self.secondary_exit_confirm_button)
