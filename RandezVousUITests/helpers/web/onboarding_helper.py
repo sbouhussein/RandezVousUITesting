@@ -18,6 +18,12 @@ class OnboardingPageHelper(BaseHelper):
         "//button[contains(normalize-space(), 'Start Quest') or normalize-space()='Checking access…']",
     )
 
+    view_quest_button = (By.XPATH, "//button[contains(normalize-space(), 'View Quest')]")
+
+    def click_view_quest(self, custom_timeout=30):
+        """The ended-quest card's button, which skips the join call and just opens the quest page."""
+        self.click(self.view_quest_button, custom_timeout=custom_timeout)
+
     def get_open_in_app_href(self, custom_timeout=30):
         """Fallback href for an app that isn't installed; generous timeout for the lazy chunk after a Vite restart."""
         wait = WebDriverWait(self.driver, custom_timeout)

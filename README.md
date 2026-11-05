@@ -173,12 +173,15 @@ RandezVousUITesting/
     ├── fixtures/                      # Static files, e.g. sample_photo.png seeded into the iOS simulator
     │
     ├── helpers/
-    │   ├── common/                    # Shared: DeviceHelperBase, access_data_helper (bans/grants via the Admin SDK)
+    │   ├── common/                    # Shared: DeviceHelperBase, access_data_helper (bans, grants, temporary quest/activity edits via the Admin SDK)
     │   ├── android/                   # Android device helper
     │   ├── ios/                       # Page Object Model classes for Appium/XCUITest
     │   │   ├── base_helper.py
     │   │   ├── custom_quest_helper.py
     │   │   ├── access_helper.py       # Join attempts that get refused (bans, ended, domain)
+    │   │   ├── guest_join_helper.py   # Guest onboarding: dashboard code entry, welcome, username, start
+    │   │   ├── ios_test_data.py       # Shared iOS constants: quest ID, test accounts, usernames
+    │   │   ├── leaderboard_helper.py  # Leaderboard screen and the expected score for a given progress
     │   │   ├── feed_helper.py         # Quest Feed screen
     │   │   ├── photo_upload_helper.py # Photo upload screen (Public / Admin Only, caption)
     │   │   ├── feed_data_helper.py    # Admin-SDK feed/photo/Storage data for the feed tests
@@ -196,13 +199,15 @@ RandezVousUITesting/
         │   ├── suite_Custom_Quest_Entry_Point/
         │   ├── suite_Quest_Access_Restrictions/   # Bans and domain-restricted quests
         │   ├── suite_Quest_Activity/
-        │   └── suite_Quest_Feed/                  # Quest Feed posts and photo visibility
+        │   ├── suite_Quest_Feed/                  # Quest Feed posts and photo visibility
+        │   └── suite_Quest_Leaderboard/           # Starting points, completion bonus, ordering
         └── web/
             ├── android/               # Quest-onboarding suite (only one test uses the Android emulator)
             │   └── suite_Quest_Onboarding_Access/
             ├── suite_Custom_Quest_Entry_Point/
             ├── suite_Domain_Specific_Tests/   # incl. domain-restricted happy + unhappy paths
-            └── suite_Quest_Activity/
+            ├── suite_Quest_Activity/
+            └── suite_Quest_Bans/              # Banned or ended quests can't be joined; bans that don't apply
 ```
 
 Each test lives at `Tests/<platform>/suite_<feature_area>/tst_<what_it_tests>/test.py`.
@@ -211,16 +216,37 @@ Each test lives at `Tests/<platform>/suite_<feature_area>/tst_<what_it_tests>/te
 
 | Suite | Covers |
 |---|---|
-| `suite_Custom_Quest_Entry_Point` | Joining a custom quest (code, URL, dashboard, guest username), and refusal when the quest has ended |
-| `suite_Quest_Activity` | Completing each activity type and whole quests, with leaderboard score checks |
+| `suite_Custom_Quest_Entry_Point` | Joining a custom quest (code, URL as a guest and then signed in, dashboard, guest username), and refusal when the quest has ended |
+| `suite_Quest_Activity` | Completing each activity type and whole quests, with leaderboard score checks, and completing an activity that has a start time (event) |
 | `suite_Quest_Feed` | A Public photo posts to the feed (and the Public / Admin Only toggle), an Admin Only photo stays out of it and can't be read by a non-admin, and a free-form post |
 | `suite_Quest_Access_Restrictions` | Refused joins from a quest or org-wide ban, a ban held under another uid with the same email, and bans that don't apply (other quest, expired); domain-restricted quests for a guest and for email/password accounts |
+| `suite_Quest_Leaderboard` | Starting points after joining, the completion bonus, and equal scores listed by who finished first |
 
 Notes:
 
 - **Feed tests** find their own post by a unique caption because the shared feed holds many posts. They delete only what the test account authored, and the private-photo test also deletes that account's stored photos. Its Storage read check takes the QA web API key from `.env.qa` in the rvsite checkout (`WEB_APP_PATH`).
 - **Access tests** write bans straight to Firestore (`helpers/common/access_data_helper.py`) and remove them afterwards, pass or fail.
 - **Not automated on iOS:** joining a domain-restricted quest as a real Google user (correct or wrong domain). The app decides from the account's `google.com` provider and Google's sign-in sheet can't be driven, so the web suite covers it with fabricated Google users. The "Switch Account (Sign Out)" button starts that Google sign-in, so tests only check it is offered.
+- **Leaderboard:** scoring defaults are 25 starting points, 100 per activity and a 250 completion bonus (`functions/scoring.js`); `LeaderboardHelper.expected_score` mirrors them, so a change there needs the helper updated. Equal scores share a rank number, so ordering tests compare row order. The one-activity quest is `OPEN_QUEST_ID` (the `web-open` fixture).
+- **Start a guest test signed out.** A login left in the simulator's keychain survives the app's full reset and makes a link open the "already signed in" welcome with no username step, so guest tests call `sign_out_if_signed_in()` first.
+- **A guest's "Exit Quest"** leaves immediately; accounts may get a confirmation sheet (`click_exit_quest` handles both).
+
+### Web suites
+
+| Suite | Covers |
+|---|---|
+| `suite_Custom_Quest_Entry_Point` | Entering a quest from the homepage and by link (signed in and out), a signed-out visitor entering a code, and a new account with no username |
+| `suite_Domain_Specific_Tests` | Domain-restricted quests: wrong domain (email/password and Google), correct domain, not signed in, and a banned user (signed out, and on the correct domain) |
+| `suite_Quest_Bans` | An org-wide ban, a ban held under another uid, or an ended quest can't be joined; bans for another quest or expired ones don't block |
+| `suite_Quest_Activity` | Each activity type and its failure cases, whole quests (including points-to-win and domain-restricted), finishing an ended quest, and activities with a start time |
+| `android/suite_Quest_Onboarding_Access` | Onboarding, team and feed pages: the restricted banner, wrong-provider sign-in, and deep-link / fallback behavior per platform |
+
+Notes:
+
+- **Temporary QA edits.** A few tests change a shared QA quest and put it back: `edited_quest` (Firestore fields, e.g. `pointsToWin`, `accessPolicy`) and `edited_activity` (an activity in the quest's Storage file, e.g. `customStartString`) in `helpers/common/access_data_helper.py`. Both restore in a `finally` (a killed run can leave an edit behind, so re-run the seed if a quest looks wrong). rvsite keeps quest definitions in a 10-minute in-memory cache that is shared by every web test in a run (the servers start once per session), so these tests also use the `fresh_web_backend` fixture, which restarts rvsite's backend before the test (so the edit is seen) and after it (so the edited quest isn't served to later tests); make the edit before the page loads.
+- **Event window (from rvsite's `ActivityCompletion.jsx`).** An activity with a start time unlocks 1 hour before the start; only location activities also close, 24 hours after it. Other types stay open.
+- **An ended quest on web** isn't joined: onboarding shows "This quest ended" and a "View Quest" button and never sends the join request. The backend also refuses per-activity completions after the end but still allows the final complete-quest call, which `tst_complete_expired_quest` relies on (it seeds a grant and finished activities, then lets the page finish the quest).
+- `Tests/web/conftest.py` holds the shared `banned_user` and `restrict` fixtures (restrictions are always removed afterwards).
 
 ---
 
@@ -287,7 +313,7 @@ Create a new file in `helpers/ios/` or `helpers/web/` named after the screen or 
 A few non-obvious things learned the hard way, in case something breaks mysteriously:
 
 - **Click a button right after opening an accordion, and it silently fails.** `element_to_be_clickable` only checks displayed+enabled — not whether the element is still mid-CSS-transition (e.g. an accordion still animating open). `BaseHelper.click()` now waits for the element's on-screen position to stabilize first. Use it instead of raw `wait.until(...).click()`.
-- **A dev-run quest doesn't reflect a Firestore edit for up to 10 minutes.** `rvsite`'s backend caches quest data (`TTL.QUEST`). The dev-only `POST /api/local-admin/quest/:orgId/:questId/timing` endpoint updates a quest's `startTime`/`endTime` *and* invalidates that cache immediately — use it instead of writing to Firestore directly when a test needs to flip a quest's timing mid-run.
+- **A dev-run quest doesn't reflect a Firestore edit for up to 10 minutes.** `rvsite`'s backend caches quest data (`TTL.QUEST`) in memory, and the web servers start once per session, so every test in a run shares that cache. The old dev-only `POST /api/local-admin/quest/:orgId/:questId/timing` endpoint, which invalidated it, no longer exists in rvsite `main`. A test that edits a quest (`edited_quest` / `edited_activity`) should opt in to `fresh_web_backend` (restarts the backend before and after) and edit before the page loads; without it the edit passes when the test is run alone and fails in a full run.
 - **A user "already joined" a quest, but `questHist` is missing.** `@pytest.mark.cleanup` only wipes the `questHist` *field* on the user doc — not the `questGrants` subcollection. `/api/quest/join` is idempotent: if a stale grant exists from an earlier run, it returns early and never rewrites `questHist`. Delete the leftover `questGrants/{questId}` doc before a test that needs a clean join.
 - **Sign-in sometimes stalls on `/login`, and Firebase later reports `auth/network-request-failed`.** The Auth request hangs and the SDK stays broken until the page reloads. `HomepageHelper.login()` and `login_from_url()` detect the stall, reload, re-enter the credentials and resubmit up to 3 times (`_submit_credentials`); the older `retry_web_login` fixture in `conftest.py` is a backstop. The root cause is **not** found: the network path tested healthy and 12/12 headless Chrome and 9/9 direct-load Safari sign-ins succeeded. Still intermittent in Safari (seen on `tst_enter_custom_quest_from_URL_signed_in`); the retry's effectiveness isn't proven.
 - **Safari has no headless mode and no `driver.get_log()`.** Both are Apple platform limitations, not something misconfigured. Use `--browser=chrome` or `--browser=firefox` if you need either.
@@ -298,7 +324,7 @@ A few non-obvious things learned the hard way, in case something breaks mysterio
 
 Everything runs against `randezvous-qa`: the iOS app (QA scheme), the web servers (`npm start` → Vite `--mode qa` on 5174 + backend on 3000) and every Firebase Admin call. Web fixtures (quests under org `test-org`, the test accounts and their usernames) are defined once in `RandezVousUITests/helpers/web/quest_test_data.py` and created by `python scripts/firebase/seed_qa_web_fixtures.py` — re-run it after editing that file or whenever QA data is reset. A test account needs a `username` or rvsite parks it on "Create Your Username" and it never leaves `/login`.
 
-Web-suite caveats: `tst_complete_expired_quest` skips while rvsite `main` lacks the dev-only quest `timing` endpoint; `tst_join_domain_quest_not_signed_in` checks that a signed-out visitor gets a Sign In modal on `/find-quest` and no quest content; the domain happy and unhappy paths sign in as fabricated Google-provider QA users (see `helpers/web/google_identity_helper.py`); and the iOS Safari "fallback" and "deep link" tests are mutually exclusive (one needs the RV app uninstalled), so one always skips.
+Web-suite caveats: `tst_join_domain_quest_not_signed_in` checks that a signed-out visitor gets a Sign In modal on `/find-quest` and no quest content; the domain happy and unhappy paths sign in as fabricated Google-provider QA users (see `helpers/web/google_identity_helper.py`); and the iOS Safari "fallback" and "deep link" tests are mutually exclusive (one needs the RV app uninstalled), so one always skips.
 
 - **Desktop Safari takes over your screen.** Safari has no headless mode, the fixture maximizes its window, and Safari automation brings its window to the front on every command, so you can't work in other apps while web tests run. Use `--browser chrome --headless` for day-to-day runs (no window, lighter, no leak risk) and keep Safari for deliberate runs.
 - **`driver.quit()` leaves `Safari --automation` running.** A stale one makes the next session fail with "The Safari instance is already paired with a different session". The desktop fixture ends its own session's process after `quit()` (printing "Safari automation processes left after teardown: N", which should be 0), and web sessions sweep leaked processes at start and end. Killing a run mid-test can still orphan one; the next run's sweep cleans it up. Your own Safari is never touched.

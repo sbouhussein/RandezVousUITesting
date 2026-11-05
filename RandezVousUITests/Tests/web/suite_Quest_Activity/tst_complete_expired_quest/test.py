@@ -1,37 +1,19 @@
 import pytest
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
 
+from helpers.common.access_data_helper import preload_progress, quest_completed_date
 from helpers.web import HomepageHelper, QuestHelper
-from helpers.web.quest_test_data import BASE_URL, EXPIRED_QUEST_ID, TEST_USER_EMAIL
-from helpers.web.quest_timing_helper import (
-    EXPIRED_END_TIME, FUTURE_END_TIME, set_end_time, timing_route_exists, wait_until_joined,
-)
+from helpers.web.quest_test_data import EXPIRED_QUEST_ID, ORG_ID, TEST_USER_EMAIL, quest_url
+
+# Both activities of the expired fixture, finished "before" it ended.
+FINISHED = {"honor challenge:1000": f"{EXPIRED_QUEST_ID}-1000", "prompt challenge:1002": f"{EXPIRED_QUEST_ID}-1002"}
 
 
 @pytest.mark.cleanup(type="email", value=TEST_USER_EMAIL)
 def test_complete_expired_quest(desktop_safari_driver):
-    """An expired quest blocks new joins but lets a returning user finish; leaves the quest expired."""
-    driver = desktop_safari_driver
-    if not timing_route_exists():
-        pytest.skip("rvsite has no dev-only quest timing endpoint (POST /api/local-admin/quest/<org>/<qid>/timing); "
-                    "this test can't flip the quest's end time without it.")
-    nav, quest = HomepageHelper(driver), QuestHelper(driver)
-    set_end_time(FUTURE_END_TIME)
-    try:
-        driver.get(BASE_URL)
-        nav.sign_in_and_find_quest(EXPIRED_QUEST_ID)
-        WebDriverWait(driver, 30).until(EC.visibility_of_element_located(quest.honor_activity_locator))
-        wait_until_joined(driver)
+    """A user who finished every activity before the quest ended can still complete the quest afterwards."""
+    preload_progress(TEST_USER_EMAIL, ORG_ID, EXPIRED_QUEST_ID, FINISHED)
+    HomepageHelper(desktop_safari_driver).sign_in_and_open(quest_url(EXPIRED_QUEST_ID))
+    quest = QuestHelper(desktop_safari_driver)
 
-        set_end_time(EXPIRED_END_TIME)  # now ended: re-enter and finish both activities
-        driver.get(BASE_URL)
-        nav.find_quest(EXPIRED_QUEST_ID)
-        WebDriverWait(driver, 30).until(EC.visibility_of_element_located(quest.honor_activity_locator))
-        quest.complete_honor_activity()
-        quest.complete_prompt_activity("yes")
-
-        assert quest.verify_quest_completion()  # those are the quest's only 2 activities
-    finally:
-        set_end_time(EXPIRED_END_TIME)
-    # TODO: a user who finished every activity before the quest expired should still be able to complete it.
+    assert quest.verify_quest_completion(), "An ended quest with every activity finished should still complete"
+    assert quest_completed_date(TEST_USER_EMAIL, EXPIRED_QUEST_ID), "The completion should be saved on the user's quest history"

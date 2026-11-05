@@ -1113,6 +1113,35 @@ def web_servers(request):
         _sweep_leaked_safari_windows()
 
 
+def _restart_web_backend():
+    """Restarts only rvsite's backend (port 3000), which clears its in-memory caches (quest definitions live 10 minutes).
+    The Vite frontend keeps running: restarting it repeatedly is what makes sign-in stall."""
+    subprocess.run(["npx", "kill-port", "3000"], capture_output=True)
+    log_fd = open(os.path.join(LOG_DIR, "web_servers.log"), "a")
+    subprocess.Popen(["npm", "run", "dev:qa"], cwd=os.path.join(WEB_APP_PATH, "backend"),
+                     stdout=log_fd, stderr=subprocess.STDOUT)
+    url = f"{quest_test_data.BACKEND_URL}/api/user/profile"
+    deadline = time.time() + 60
+    while True:
+        try:
+            if requests.get(url).status_code < 500:
+                return
+        except requests.exceptions.ConnectionError:
+            pass
+        if time.time() > deadline:
+            raise RuntimeError(f"The backend did not come back after a restart. See {LOG_DIR}/web_servers.log")
+        time.sleep(0.5)
+
+
+@pytest.fixture
+def fresh_web_backend(web_servers):
+    """For web tests that edit a QA quest (edited_quest / edited_activity): the session's rvsite backend caches quest
+    definitions, so restart it before the test (to see the edit) and after (so the edited quest isn't served to later tests)."""
+    _restart_web_backend()
+    yield
+    _restart_web_backend()
+
+
 @pytest.fixture(scope="function", autouse=True)
 def restart_node_server_for_web(request):
     """Ensures the shared web servers are running for any test under Tests/web/."""

@@ -16,6 +16,7 @@ class HomepageHelper:
     auth_network_error = (By.XPATH, "//*[contains(normalize-space(), 'auth/network-request-failed')]")
     guest_button = (By.XPATH, "//button[contains(normalize-space(), 'Continue as Guest')]")
     sign_in_save = (By.XPATH, "//a[normalize-space()='Sign In to Save Progress']")
+    username_heading = (By.XPATH, "//h1[normalize-space()='Create Your Username']")
 
     def __init__(self, driver):
         self.driver = driver
@@ -114,6 +115,14 @@ class HomepageHelper:
     def login(self, email, password):
         self.click_login_button()
         self._submit_credentials(email, password)
+
+    def is_create_username_visible(self, custom_timeout=15):
+        """True if the app parks the signed-in user on the 'Create Your Username' step."""
+        try:
+            WebDriverWait(self.driver, custom_timeout).until(EC.visibility_of_element_located(self.username_heading))
+            return True
+        except TimeoutException:
+            return False
 
     def sign_in_and_find_quest(self, quest_code, email=TEST_USER_EMAIL, password=TEST_USER_PASSWORD):
         self.login(email, password)
