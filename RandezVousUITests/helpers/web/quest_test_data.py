@@ -25,6 +25,11 @@ TEST_USER_PASSWORD = "OmarTest123"
 WRONG_DOMAIN_EMAIL = "unauthorized_domain_user@yahoo.com"
 WRONG_DOMAIN_PASSWORD = "OmarTest123"
 WRONG_DOMAIN_USERNAME = "webwrongdomain"      # usernames are lowercase, 3-20 chars of [a-z0-9_]
+# A throwaway ordinary account for tests that need a second user; created and removed by the `second_user` fixture.
+SECOND_USER_EMAIL = "qa_leaderboard_second@example.com"
+SECOND_USER_PASSWORD = "OmarTest123"
+SECOND_USER_UID = "qa-leaderboard-second-user"
+SECOND_USER_USERNAME = "leaderboardsecond"
 RIGHT_DOMAIN_EMAIL = "test_user@randezvous.com"
 RIGHT_DOMAIN_PASSWORD = "OmarTest123"
 RIGHT_DOMAIN_USERNAME = "webrightdomain"
@@ -54,6 +59,10 @@ def feed_url(qid, org_id=ORG_ID, base_url=BASE_URL):
 
 def quest_url(qid, org_id=ORG_ID, base_url=BASE_URL):
     return f"{base_url}/quest/organization/{org_id}/{qid}"
+
+
+def leaderboard_url(qid, org_id=ORG_ID, base_url=BASE_URL):
+    return f"{base_url}/leaderboard/{org_id}/{qid}"
 
 
 def quest_path(qid, org_id=ORG_ID):

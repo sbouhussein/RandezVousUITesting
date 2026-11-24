@@ -8,6 +8,7 @@ from helpers.ios.feed_helper import FeedHelper
 from helpers.ios.guest_join_helper import GuestJoinHelper
 from helpers.ios.leaderboard_helper import LeaderboardHelper
 from helpers.ios.login_page_helper import LoginPageHelper, WelcomeToQuestHelper, ChooseUsernameHelper, StartAdventureHelper
+from helpers.ios.notification_helper import NotificationHelper
 from helpers.ios.photo_upload_helper import PhotoUploadHelper
 from helpers.ios.profile_helper import ProfileHelper
 from helpers.ios.quest_feed_helper import QuestFeedHelper

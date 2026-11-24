@@ -66,8 +66,13 @@ class QuestHelper(BaseHelper, LoginPageHelper, ProfileHelper):
         except Exception:
             return False
 
-    def sign_out_if_signed_in(self):
+    def sign_out_if_signed_in(self, keep_keychain=False):
         if self.is_visible(self.tab_bar):
+            if keep_keychain:
+                # The fast reset wipes the Keychain, which also holds the push token apsd validates.
+                print("App is signed in (anonymous or account). Logging out through the profile menu.")
+                ProfileHelper(self.driver).log_out_if_logged_in()
+                return
             print("App is signed in (anonymous or account). Fast-resetting to signed-out state.")
             DeviceHelper(self.driver).fast_reset_to_signed_out()
 
@@ -90,6 +95,7 @@ class CustomQuestPage(BaseHelper):
     quest_title = (AppiumBy.IOS_CLASS_CHAIN, "**/XCUIElementTypeStaticText[`label == 'automation2'`][1]")
     quest_date_range = (AppiumBy.ACCESSIBILITY_ID, "March 9, 2026 - March 3, 2027")
     quest_feed_button = (AppiumBy.ACCESSIBILITY_ID, "Quest Feed, : Hello")
+    quest_completed_message = (AppiumBy.ACCESSIBILITY_ID, "Congratulations on Completing Your Quest!")
     check_quest_requirements = (AppiumBy.ACCESSIBILITY_ID, "View Quest Requirements")
     view_prompt = (AppiumBy.ACCESSIBILITY_ID, "View Prompt")
     prompt_text_box = (AppiumBy.IOS_CLASS_CHAIN, "**/XCUIElementTypeTextView")
@@ -119,8 +125,8 @@ class CustomQuestPage(BaseHelper):
     # Shown in place of the "Complete in Quest" button when the user is out of range.
     out_of_range_message = (AppiumBy.IOS_PREDICATE, 'label CONTAINS "away from being able to complete this activity"')
 
-    def sign_in_and_join(self, email=TEST_EMAIL, password=TEST_PASSWORD, quest_code=QUEST_ID):
-        QuestHelper(self.driver).sign_out_if_signed_in()
+    def sign_in_and_join(self, email=TEST_EMAIL, password=TEST_PASSWORD, quest_code=QUEST_ID, keep_keychain=False):
+        QuestHelper(self.driver).sign_out_if_signed_in(keep_keychain)
         LoginPageHelper(self.driver).login_with_credentials(email, password)
         self.join_custom_quest(quest_code)
 
@@ -183,14 +189,19 @@ class CustomQuestPage(BaseHelper):
         """Swipes the horizontal activity carousel until `activity` is on screen, then taps its
         center. Appium reports off-screen carousel cards as present, so visibility is judged from
         the element's x position instead."""
-        locator = (AppiumBy.IOS_PREDICATE, f'name CONTAINS "{activity}"')
+        # Feed rows (earlier submissions) can contain the same word and sort before the card, so prefer a real
+        # button that isn't a feed row, and fall back to any match.
+        locator = (AppiumBy.IOS_PREDICATE,
+                   f'name CONTAINS "{activity}" AND type == "XCUIElementTypeButton" AND NOT (name CONTAINS "Quest Feed")')
+        any_match = (AppiumBy.IOS_PREDICATE, f'name CONTAINS "{activity}"')
 
         short_wait = WebDriverWait(self.driver, 2)
         screen_width = self.driver.get_window_size()['width']
 
         for i in range(max_swipes):
             try:
-                element = short_wait.until(EC.presence_of_element_located(locator))
+                element = short_wait.until(
+                    lambda d: next(iter(d.find_elements(*locator) or d.find_elements(*any_match)), None))
                 rect = element.rect
 
                 # In the right-most 15% of the screen (or past it) counts as off-screen.
@@ -261,6 +272,11 @@ class CustomQuestPage(BaseHelper):
     def click_submit(self):
         self.wait.until(EC.element_to_be_clickable(self.submit_response_button)).click()
 
+    def select_prompt_visibility(self, option):
+        """Picks "Public" (default) or "Private" on the prompt screen's visibility selector."""
+        locator = (AppiumBy.IOS_CLASS_CHAIN, f'**/XCUIElementTypeButton[`name == "{option}"`]')
+        self.wait.until(EC.element_to_be_clickable(locator)).click()
+
     def click_check_answer(self):
         self.wait.until(EC.element_to_be_clickable(self.check_answer_button)).click()
 
@@ -304,11 +320,13 @@ class CustomQuestPage(BaseHelper):
 
     # Prompt
 
-    def complete_prompt_activity(self, activity, response_text, click_back=False):
+    def complete_prompt_activity(self, activity, response_text, click_back=False, visibility=None):
         self.click_activity(activity)
         self.click_check_requirements()
         self.click_view_prompt()
         self.enter_prompt(response_text)
+        if visibility:
+            self.select_prompt_visibility(visibility)
         self.click_submit()
         self.dismiss_rating_popup_if_present()
         self.click_out_of_activity()
@@ -374,6 +392,9 @@ class CustomQuestPage(BaseHelper):
             'y': y,
             'element': first_photo.id
         })
+
+    def is_quest_completed_message_visible(self, custom_timeout=20):
+        return self.is_visible(self.quest_completed_message, custom_timeout=custom_timeout)
 
     def dismiss_quest_completion_overlay(self):
         """Closes the quest-completion overlay by tapping its dimmed area (it has no close button), then goes back."""

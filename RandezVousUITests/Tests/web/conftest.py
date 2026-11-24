@@ -1,7 +1,7 @@
 import pytest
 
-from helpers.common.access_data_helper import ban_user_from_quest, clear_stale_grant, restrict_user, unban_user
-from helpers.web.quest_test_data import ORG_ID
+from helpers.common.access_data_helper import ban_user_from_quest, clear_stale_grant, restrict_user, temporary_password_user, unban_user
+from helpers.web.quest_test_data import ORG_ID, SECOND_USER_EMAIL, SECOND_USER_PASSWORD, SECOND_USER_UID, SECOND_USER_USERNAME
 
 
 @pytest.fixture
@@ -34,3 +34,10 @@ def restrict():
     yield make
     for doc_id in created:
         unban_user(ORG_ID, doc_id)
+
+
+@pytest.fixture
+def second_user():
+    """A throwaway email/password account (not on any restricted domain) for tests that need two users; returns (email, password, username)."""
+    with temporary_password_user(SECOND_USER_EMAIL, SECOND_USER_PASSWORD, SECOND_USER_UID, SECOND_USER_USERNAME, ORG_ID):
+        yield SECOND_USER_EMAIL, SECOND_USER_PASSWORD, SECOND_USER_USERNAME

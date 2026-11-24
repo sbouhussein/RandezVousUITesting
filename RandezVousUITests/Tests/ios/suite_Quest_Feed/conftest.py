@@ -11,12 +11,15 @@ from helpers.ios.firebase_cleanup_helper import cleanup_user_data
 
 @pytest.fixture(autouse=True)
 def feed_cleanup():
-    """Clears the test user's Photo flags before the test and deletes the feed posts it authored during the test, pass or fail."""
+    """Clears the test user's Photo flags and stored prompt responses before the test, and deletes the feed posts it
+    authored during the test, pass or fail."""
     since = feed_data.utc_now() - timedelta(seconds=10)  # margin for sim-vs-server clock skew
     feed_data.clear_photo_submission()
+    feed_data.clear_prompt_submission()
     yield
     removed = feed_data.delete_feed_posts_since(since=since)
     feed_data.clear_photo_submission()
+    feed_data.clear_prompt_submission()
     print(f"Feed cleanup: removed {removed} post(s) authored during the test")
 
 

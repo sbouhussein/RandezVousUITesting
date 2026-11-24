@@ -1,7 +1,9 @@
 """Direct Firestore setup/teardown for quest-access scenarios (bans, stale grants) shared by iOS and web.
 Mirrors the restriction schema in rvsite's backend/lib/restrictionUtils.js; needs firebase_init (randezvous-qa)."""
+import hashlib
 import json
 from contextlib import contextmanager
+import time
 from datetime import datetime, timedelta, timezone
 
 import firebase_admin
@@ -64,11 +66,59 @@ def has_quest_grant(email, qid):
     return firestore.client().collection("Users").document(uid).collection("questGrants").document(qid).get().exists
 
 
+def user_uid(email):
+    return fb_auth.get_user_by_email(email).uid
+
+
 def create_user_without_username(email, password):
     """Creates an email/password account with no username, as a brand-new sign-up has before it picks one."""
     _require_qa()
     delete_user_by_email(email)
     return fb_auth.create_user(email=email, password=password).uid
+
+
+def create_google_domain_password_user(email, password, uid, username):
+    """Creates an account that signs in with email and password but also lists a fake `google.com` provider entry on
+    `email`, so an app that checks the provider's domain (iOS) accepts it without Google's sign-in screen.
+    The password hash is SHA-256 of salt + password. Also writes the Users doc with `username`."""
+    _require_qa()
+    delete_user_by_email(email)
+    try:
+        fb_auth.delete_user(uid)
+    except fb_auth.UserNotFoundError:
+        pass
+    salt = b"qa-fake-google-salt"
+    record = fb_auth.ImportUserRecord(
+        uid=uid, email=email, email_verified=True, display_name=f"QA {username}",
+        password_hash=hashlib.sha256(salt + password.encode()).digest(), password_salt=salt,
+        provider_data=[fb_auth.UserProvider(uid=f"qa-google-{uid}", provider_id="google.com", email=email,
+                                            display_name=f"QA {username}")])
+    result = fb_auth.import_users([record], hash_alg=fb_auth.UserImportHash.sha256(rounds=1))
+    if result.failure_count:
+        raise RuntimeError(f"Could not create {email}: {[e.reason for e in result.errors]}")
+    firestore.client().collection("Users").document(uid).set(
+        {"username": username, "uid": uid, "email": email, "lastUpdated": firestore.SERVER_TIMESTAMP}, merge=True)
+    return uid
+
+
+@contextmanager
+def temporary_password_user(email, password, uid, username, org_id=None):
+    """Creates an ordinary email/password account with a username, and on exit deletes it and its leaderboard row in `org_id`."""
+    _require_qa()
+    delete_user_by_email(email)
+    try:
+        fb_auth.delete_user(uid)
+    except fb_auth.UserNotFoundError:
+        pass
+    fb_auth.create_user(uid=uid, email=email, password=password, email_verified=True, display_name=f"QA {username}")
+    firestore.client().collection("Users").document(uid).set(
+        {"username": username, "uid": uid, "email": email, "lastUpdated": firestore.SERVER_TIMESTAMP}, merge=True)
+    try:
+        yield uid
+    finally:
+        delete_user_by_email(email)
+        if org_id:
+            firestore.client().collection("Organizations").document(org_id).collection("leaders").document(uid).delete()
 
 
 def delete_user_by_email(email):
@@ -137,3 +187,61 @@ def edited_activity(org_id, qid, activity_id, **fields):
         yield
     finally:
         blob.upload_from_string(original, content_type="application/json")
+
+
+def _feed_ref(org_id, qid):
+    return firestore.client().collection("Organizations").document(org_id).collection("quests").document(qid).collection("feed")
+
+
+def feed_posts(email, org_id, qid, since=None, post_type=None):
+    """Feed docs authored by `email` on `qid`, optionally limited to those at or after `since` (UTC datetime) and a type."""
+    uid = fb_auth.get_user_by_email(email).uid
+    posts = []
+    for doc in _feed_ref(org_id, qid).stream():
+        data = doc.to_dict()
+        if (data.get("author") or {}).get("id") != uid:
+            continue
+        if since is not None and data["timestamp"] < since:
+            continue
+        if post_type and data.get("type") != post_type:
+            continue
+        posts.append({**data, "id": doc.id})
+    return posts
+
+
+def wait_for_feed_post(email, org_id, qid, since, post_type=None, predicate=None, timeout=15):
+    """Polls until a matching feed post exists and returns it, or None after `timeout` seconds."""
+    deadline = time.monotonic() + timeout
+    while True:
+        for post in feed_posts(email, org_id, qid, since, post_type):
+            if predicate is None or predicate(post):
+                return post
+        if time.monotonic() > deadline:
+            return None
+        time.sleep(1)
+
+
+def delete_feed_posts(email, org_id, qid, since):
+    """Removes the feed posts `email` authored on `qid` since `since`; returns how many."""
+    _require_qa()
+    posts = feed_posts(email, org_id, qid, since)
+    for post in posts:
+        _feed_ref(org_id, qid).document(post["id"]).delete()
+    return len(posts)
+
+
+def _subscriber_ref(email, org_id, qid):
+    uid = fb_auth.get_user_by_email(email).uid
+    return firestore.client().collection("Organizations").document(org_id).collection("quests").document(qid).collection("subscribers").document(uid)
+
+
+def get_notification_setting(email, org_id, qid):
+    """The quest's notificationSetting for `email` (0 none, 1 announcements, 2 all), or None without a subscriber doc."""
+    snap = _subscriber_ref(email, org_id, qid).get()
+    return snap.to_dict().get("notificationSetting") if snap.exists else None
+
+
+def delete_subscriber(email, org_id, qid):
+    """Removes the user's subscriber doc so the next join starts from the app's default setting."""
+    _require_qa()
+    _subscriber_ref(email, org_id, qid).delete()

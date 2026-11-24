@@ -34,6 +34,7 @@ class QuestHelper(BaseHelper):
     photo_activity_locator = (By.XPATH, "//h4[normalize-space()='Photo Activity']")
     complete_photo_button = (By.XPATH, "//button[@aria-label='Complete Photo Activity']")
     file_input = (By.XPATH, "//input[@type='file']")
+    share_publicly_checkbox = (By.XPATH, "//label[contains(., 'Share publicly')]//input[@type='checkbox']")
 
     # Location
     location_activity_locator = (By.XPATH, "//h4[normalize-space()='Location Activity']")
@@ -41,6 +42,10 @@ class QuestHelper(BaseHelper):
     check_location_button = (By.XPATH, "//button[contains(., 'Check My Location')]")
     location_error_message = (By.XPATH,
                               "//div[contains(@class, 'bg-red-50') and contains(., 'Location verification failed')]")
+
+    # Event time locks: the card swaps its Complete button for this label; the completion dialog shows the window message
+    not_yet_available_label = (By.XPATH, "//div[normalize-space()='Not Yet Available']")
+    window_passed_message = (By.XPATH, "//p[normalize-space()='Window has passed']")
 
     text_box = (By.XPATH, "//textarea[@aria-label='Your response']")
     complete_activity_button = (By.XPATH, "//button[normalize-space()='Complete Activity']")
@@ -84,7 +89,13 @@ class QuestHelper(BaseHelper):
         textarea.send_keys(response)
         self.click(self.complete_activity_button)
 
-    def complete_prompt_activity(self, response):
+    def set_share_publicly(self, public):
+        """Sets the dialog's "Share publicly" checkbox (checked by default) to `public`."""
+        checkbox = self.wait.until(EC.presence_of_element_located(self.share_publicly_checkbox))
+        if checkbox.is_selected() != public:
+            self.click(self.share_publicly_checkbox)
+
+    def complete_prompt_activity(self, response, public=True):
         print("click and complete prompt activity")
         self.click(self.prompt_activity_locator)
         self.click(self.complete_prompt_button)
@@ -92,6 +103,8 @@ class QuestHelper(BaseHelper):
         textarea.clear()
         print("Entering response")
         textarea.send_keys(response)
+        if not public:
+            self.set_share_publicly(False)
         self.click(self.complete_activity_button)
 
     def complete_honor_activity(self):
@@ -101,11 +114,13 @@ class QuestHelper(BaseHelper):
         self.click(self.honor_code_checkbox)
         self.click(self.complete_activity_button)
 
-    def complete_photo_activity(self):
+    def complete_photo_activity(self, public=True):
         print("click and complete photo activity")
         self.click(self.photo_activity_locator)
         self.click(self.complete_photo_button)
         self.upload_photo()
+        if not public:
+            self.set_share_publicly(False)
         self.click(self.complete_activity_button)
 
     def upload_photo(self, file_name="test_image.jpg"):
@@ -197,6 +212,12 @@ class QuestHelper(BaseHelper):
         self.driver.back()
         self.is_visible(dynamic_locator, custom_timeout=5)
         return result
+
+    def is_not_yet_available_visible(self):
+        return self.is_visible(self.not_yet_available_label, custom_timeout=5)
+
+    def is_window_passed_visible(self):
+        return self.is_visible(self.window_passed_message, custom_timeout=5)
 
     def is_trivia_error_visible(self):
         return self.is_visible(self.trivia_error_message, custom_timeout=3)

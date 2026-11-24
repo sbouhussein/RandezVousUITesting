@@ -12,7 +12,7 @@ Automated UI test suite for RandezVous, built with [pytest](https://pytest.org).
 
 - [Prerequisites](#prerequisites)
 - [Setup](#setup)
-- [Running Tests](#running-tests)
+- [Running Tests](#running-tests) (including the [run script](#run-script-proof-of-concept))
 - [Repository Structure](#repository-structure)
 - [Adding Tests](#adding-tests)
 - [Style Guide](#style-guide)
@@ -150,6 +150,79 @@ pytest RandezVousUITests/Tests/web --browser=firefox --headless
 
 Combine as needed, e.g. `pytest -s -v --maxfail=1 RandezVousUITests/Tests/web`.
 
+### Run script (proof of concept)
+
+`scripts/run_tests.sh` is one entry point for running the tests, headless or on a visible simulator/emulator. It activates `.venv` itself, starts the simulator/emulator when a category needs one, and exits 1 if any phase fails.
+
+```
+./scripts/run_tests.sh <category> [--headless | --visible] [options] [-- extra pytest args]
+```
+
+Categories are pytest markers, assigned by path in `RandezVousUITests/conftest.py` (one place to edit; `pytest -m smoke` works too). Every test is in at least one.
+
+| Category | What it runs |
+|---|---|
+| `all` | everything: web, then iOS, then Android (takes hours) |
+| `smoke` | a few fast checks of the most important flows (3 web, 2 iOS) |
+| `ux` | user-facing flows: joining, activities, feed, leaderboard, entry points |
+| `access` | bans, domain restrictions, ended or expired quests, onboarding fallbacks |
+| `push` | notification tests that send real pushes (slow, flakiest) |
+| `web` / `ios` / `android` | one platform, whatever the category (`android` = `Tests/web/android`) |
+
+| Option | Effect |
+|---|---|
+| `--headless` | No windows: headless Chrome, simulator booted without the Simulator app, emulator with `-no-window` (default) |
+| `--visible` | Chrome, Simulator and emulator windows on screen |
+| `--platform <web\|ios\|android>` | Limit `smoke`/`ux`/`access`/`push` to one platform |
+| `--udid <id>` | iOS simulator to use (else `$IOS_UDID`, else the one already booted) |
+| `--avd <name>` | Android emulator (else `$ANDROID_DEVICE_NAME`, else `Pixel_8_API_34`) |
+| `--list` | List the selected tests without running them |
+| `--dry-run` | Print what would run without starting anything |
+| `-- <args>` | Everything after `--` goes to pytest |
+
+Examples:
+
+```bash
+./scripts/run_tests.sh smoke --list
+./scripts/run_tests.sh smoke --visible --platform web
+./scripts/run_tests.sh ux --headless --platform web -- -k leaderboard
+./scripts/run_tests.sh access --headless
+./scripts/run_tests.sh ios --visible --udid <simulator-udid> -- -k joining_quest_after_logging_in
+./scripts/run_tests.sh all --headless
+```
+
+A category with no tests on a platform is skipped without starting that device. To change what is in a category, edit the lists at the top of `conftest.py` (`SMOKE_TESTS`, `UX_SUITES`, `ACCESS_SUITES`, `PUSH_SUITES`).
+
+---|---|
+| `all` | web, then iOS, then Android (takes hours) |
+| `ux` | only the tests listed in `scripts/ux_tests.txt` (the list is still to be decided; it holds demo placeholders) |
+| `web` | desktop Chrome tests (`Tests/web`, excluding `Tests/web/android`) |
+| `ios` | `Tests/ios` on the iOS Simulator |
+| `android` | `Tests/web/android` on the Android emulator |
+
+| Option | Effect |
+|---|---|
+| `--headless` | No windows: headless Chrome, simulator booted without the Simulator app, emulator with `-no-window` (default) |
+| `--visible` | Chrome, Simulator and emulator windows on screen |
+| `--udid <id>` | iOS simulator to use (else `$IOS_UDID`, else the one already booted) |
+| `--avd <name>` | Android emulator (else `$ANDROID_DEVICE_NAME`, else `Pixel_8_API_34`) |
+| `--list` | List the selected tests without running them |
+| `--dry-run` | Print what would run without starting anything |
+| `-- <args>` | Everything after `--` goes to pytest |
+
+Examples:
+
+```bash
+./scripts/run_tests.sh ux --list
+./scripts/run_tests.sh ux --visible
+./scripts/run_tests.sh web --headless -- -k leaderboard
+./scripts/run_tests.sh ios --visible --udid <simulator-udid> -- -k joining_quest_after_logging_in
+./scripts/run_tests.sh android --visible
+./scripts/run_tests.sh all --headless
+```
+
+`scripts/ux_tests.txt` takes one entry per line: a test path relative to `RandezVousUITests/` (e.g. `Tests/ios/suite_Quest_Feed`) or `k:<name>` for a pytest `-k` expression. iOS and Android paths make `ux` start the simulator or emulator too.
+
 ---
 
 ## Repository Structure
@@ -200,14 +273,18 @@ RandezVousUITesting/
         │   ├── suite_Quest_Access_Restrictions/   # Bans and domain-restricted quests
         │   ├── suite_Quest_Activity/
         │   ├── suite_Quest_Feed/                  # Quest Feed posts and photo visibility
-        │   └── suite_Quest_Leaderboard/           # Starting points, completion bonus, ordering
+        │   ├── suite_Quest_Leaderboard/           # Starting points, completion bonus, ordering
+        │   └── suite_Quest_Notifications/         # Notification setting -> who the backend notifies
         └── web/
             ├── android/               # Quest-onboarding suite (only one test uses the Android emulator)
             │   └── suite_Quest_Onboarding_Access/
             ├── suite_Custom_Quest_Entry_Point/
             ├── suite_Domain_Specific_Tests/   # incl. domain-restricted happy + unhappy paths
             ├── suite_Quest_Activity/
-            └── suite_Quest_Bans/              # Banned or ended quests can't be joined; bans that don't apply
+            ├── suite_Quest_Bans/              # Banned or ended quests can't be joined; bans that don't apply
+            ├── suite_Quest_Feed/              # Photo / prompt posts reach the feed only when public and the feed is on
+            ├── suite_Quest_Leaderboard/       # Starting points, completion bonus, ordering (expected failure)
+            └── suite_Quest_Notifications/     # Notification setting -> who the backend notifies
 ```
 
 Each test lives at `Tests/<platform>/suite_<feature_area>/tst_<what_it_tests>/test.py`.
@@ -217,16 +294,17 @@ Each test lives at `Tests/<platform>/suite_<feature_area>/tst_<what_it_tests>/te
 | Suite | Covers |
 |---|---|
 | `suite_Custom_Quest_Entry_Point` | Joining a custom quest (code, URL as a guest and then signed in, dashboard, guest username), and refusal when the quest has ended |
-| `suite_Quest_Activity` | Completing each activity type and whole quests, with leaderboard score checks, and completing an activity that has a start time (event) |
-| `suite_Quest_Feed` | A Public photo posts to the feed (and the Public / Admin Only toggle), an Admin Only photo stays out of it and can't be read by a non-admin, and a free-form post |
-| `suite_Quest_Access_Restrictions` | Refused joins from a quest or org-wide ban, a ban held under another uid with the same email, and bans that don't apply (other quest, expired); domain-restricted quests for a guest and for email/password accounts |
+| `suite_Quest_Activity` | Completing each activity type and whole quests (also by reaching a points target, and an ended quest whose activities were all finished earlier), with leaderboard score checks, and completing an activity that has a start time (event) |
+| `suite_Quest_Feed` | A Public photo posts to the feed (and the Public / Admin Only toggle), an Admin Only photo stays out of it and can't be read by a non-admin, a free-form post, and open-prompt responses (a Public one is a feed comment, a Private one stays out), plus both with the feed turned off |
+| `suite_Quest_Access_Restrictions` | Refused joins from a quest or org-wide ban, a ban held under another uid with the same email, and bans that don't apply (other quest, expired); domain-restricted quests for a guest and for email/password accounts, for an account on the allowed domain (joins, and is refused when banned), and for one on the wrong Google domain (told the quest needs the allowed domain, offered Switch Account) |
 | `suite_Quest_Leaderboard` | Starting points after joining, the completion bonus, and equal scores listed by who finished first |
+| `suite_Quest_Notifications` | The Quest Feed's bell menu: Announcements Only, All Notifications, No Notifications and switching between them each decide whether the backend notifies the user of an announcement and of a feed post; plus the default setting (expected failure, see Known Quirks) |
 
 Notes:
 
 - **Feed tests** find their own post by a unique caption because the shared feed holds many posts. They delete only what the test account authored, and the private-photo test also deletes that account's stored photos. Its Storage read check takes the QA web API key from `.env.qa` in the rvsite checkout (`WEB_APP_PATH`).
 - **Access tests** write bans straight to Firestore (`helpers/common/access_data_helper.py`) and remove them afterwards, pass or fail.
-- **Not automated on iOS:** joining a domain-restricted quest as a real Google user (correct or wrong domain). The app decides from the account's `google.com` provider and Google's sign-in sheet can't be driven, so the web suite covers it with fabricated Google users. The "Switch Account (Sign Out)" button starts that Google sign-in, so tests only check it is offered.
+- **Domain-restricted quests on iOS:** the app decides from the account's `google.com` provider, and Google's real sign-in sheet can't be driven. The correct-domain tests use the `domain_user` fixture instead: an account created for the test that signs in with email and password but also lists a fake `google.com` provider on an allowed domain (`access_data_helper.create_google_domain_password_user`). It is deleted afterwards. The `wrong_domain_user` fixture does the same with a Google provider on another domain. The "Switch Account (Sign Out)" button starts Google's real sign-in, so tests only check it is offered.
 - **Leaderboard:** scoring defaults are 25 starting points, 100 per activity and a 250 completion bonus (`functions/scoring.js`); `LeaderboardHelper.expected_score` mirrors them, so a change there needs the helper updated. Equal scores share a rank number, so ordering tests compare row order. The one-activity quest is `OPEN_QUEST_ID` (the `web-open` fixture).
 - **Start a guest test signed out.** A login left in the simulator's keychain survives the app's full reset and makes a link open the "already signed in" welcome with no username step, so guest tests call `sign_out_if_signed_in()` first.
 - **A guest's "Exit Quest"** leaves immediately; accounts may get a confirmation sheet (`click_exit_quest` handles both).
@@ -238,7 +316,10 @@ Notes:
 | `suite_Custom_Quest_Entry_Point` | Entering a quest from the homepage and by link (signed in and out), a signed-out visitor entering a code, and a new account with no username |
 | `suite_Domain_Specific_Tests` | Domain-restricted quests: wrong domain (email/password and Google), correct domain, not signed in, and a banned user (signed out, and on the correct domain) |
 | `suite_Quest_Bans` | An org-wide ban, a ban held under another uid, or an ended quest can't be joined; bans for another quest or expired ones don't block |
-| `suite_Quest_Activity` | Each activity type and its failure cases, whole quests (including points-to-win and domain-restricted), finishing an ended quest, and activities with a start time |
+| `suite_Quest_Activity` | Each activity type and its failure cases, whole quests (including points-to-win and domain-restricted), finishing an ended quest, activities with a start time, and the two event locks ("Not Yet Available", "Window has passed") |
+| `suite_Quest_Feed` | A photo or an open-prompt response reaches the quest feed only when it is shared publicly and the quest's feed is on (three cases each) |
+| `suite_Quest_Leaderboard` | Starting points after joining and the completion bonus after finishing; `tst_leaderboard_order_by_completion_date` expects ties listed by who finished first and is an expected failure because rvsite has no completion-time tie-break |
+| `suite_Quest_Notifications` | The quest page's Notifications dropdown (All activity, Announcements only, None, switching) decides whether the backend notifies the user of an announcement and of a feed post; plus the default setting (expected failure) |
 | `android/suite_Quest_Onboarding_Access` | Onboarding, team and feed pages: the restricted banner, wrong-provider sign-in, and deep-link / fallback behavior per platform |
 
 Notes:
@@ -312,6 +393,8 @@ Create a new file in `helpers/ios/` or `helpers/web/` named after the screen or 
 
 A few non-obvious things learned the hard way, in case something breaks mysteriously:
 
+- **Notification tests: iOS reads the lock screen, web checks the backend's decision.** The iOS tests pick a setting in the Quest Feed's bell menu, lock the simulator, post an announcement or feed post from another account, and read the lock screen for a notification with the right title and message (a time stamp in the message tells it from earlier runs). They need a simulator whose push delivery works: on this Intel/T2 Mac a freshly created simulator received one real push, then every later one was dropped by the simulator's push daemon ("completely unknown token"), whatever the driver's reset settings, so these tests currently fail here at the lock-screen step. The web tests (and `notification_data_helper.user_notified`) instead put a malformed "sentinel" device token on the user and see whether the Cloud Function deletes it (it deletes tokens FCM rejects, only for users it selected); a control subscriber confirms the function ran. The simulator's notification permission must be allowed (a stale "denied" answer hides even `simctl push` banners until the app is reinstalled).
+- **Expected failures mark application gaps.** `xfail(strict=True)` tests fail on purpose until the app changes, then the run flags them: rvsite's leaderboard has no completion-time tie-break (`tst_leaderboard_order_by_completion_date`), and rvsite doesn't apply a quest's default notification setting to a new web member (it shows None) while iOS does (`web/.../tst_announcements_only_is_default_setting`). A quest's default is its `defaultNotificationSetting` (1 or 2, set in the admin Settings tab); with none set, iOS falls back to All Notifications.
 - **Click a button right after opening an accordion, and it silently fails.** `element_to_be_clickable` only checks displayed+enabled — not whether the element is still mid-CSS-transition (e.g. an accordion still animating open). `BaseHelper.click()` now waits for the element's on-screen position to stabilize first. Use it instead of raw `wait.until(...).click()`.
 - **A dev-run quest doesn't reflect a Firestore edit for up to 10 minutes.** `rvsite`'s backend caches quest data (`TTL.QUEST`) in memory, and the web servers start once per session, so every test in a run shares that cache. The old dev-only `POST /api/local-admin/quest/:orgId/:questId/timing` endpoint, which invalidated it, no longer exists in rvsite `main`. A test that edits a quest (`edited_quest` / `edited_activity`) should opt in to `fresh_web_backend` (restarts the backend before and after) and edit before the page loads; without it the edit passes when the test is run alone and fails in a full run.
 - **A user "already joined" a quest, but `questHist` is missing.** `@pytest.mark.cleanup` only wipes the `questHist` *field* on the user doc — not the `questGrants` subcollection. `/api/quest/join` is idempotent: if a stale grant exists from an earlier run, it returns early and never rewrites `questHist`. Delete the leftover `questGrants/{questId}` doc before a test that needs a clean join.

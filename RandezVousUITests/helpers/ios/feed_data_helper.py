@@ -20,6 +20,8 @@ QA_BUCKET = "randezvous-qa.firebasestorage.app"
 ORG_ID = "test-org"
 # The Photo activity of test-automation-quest (feed imagePost docs and the user's photo arrays use this key).
 PHOTO_ACTIVITY_KEY = f"{QUEST_ID}-1001"
+# The open-ended Prompt activity (its public response also becomes a feed comment).
+PROMPT_ACTIVITY_KEY = f"{QUEST_ID}-1002"
 
 
 def unique_text(prefix="ui-test"):
@@ -95,6 +97,25 @@ def delete_user_feed_posts(email=TEST_EMAIL):
     for post in posts:
         ref.document(post["id"]).delete()
     return len(posts)
+
+
+def _prompt_response_ref(db, email, activity_key, public):
+    return (db.collection("Organizations").document(ORG_ID).collection("quests").document(QUEST_ID)
+            .collection("submission-meta").document(activity_key)
+            .collection("public" if public else "private").document(_uid(email)))
+
+
+def prompt_response(public, email=TEST_EMAIL, activity_key=PROMPT_ACTIVITY_KEY):
+    """The user's stored prompt response (public or private copy), or None."""
+    doc = _prompt_response_ref(_db(), email, activity_key, public).get()
+    return (doc.to_dict() or {}).get("response") if doc.exists else None
+
+
+def clear_prompt_submission(email=TEST_EMAIL, activity_key=PROMPT_ACTIVITY_KEY):
+    """Deletes the stored public and private prompt responses so a test starts with none on file."""
+    db = _db()
+    for public in (True, False):
+        _prompt_response_ref(db, email, activity_key, public).delete()
 
 
 def photo_visibility(email=TEST_EMAIL, activity_key=PHOTO_ACTIVITY_KEY):

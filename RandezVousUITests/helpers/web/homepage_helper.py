@@ -134,6 +134,12 @@ class HomepageHelper:
         self.wait_until_signed_in()
         self.driver.get(url)
 
+    def sign_out(self):
+        """Drops the browser's session (cookie plus Firebase's IndexedDB login) so the next sign-in is a different user."""
+        self.driver.delete_all_cookies()
+        self.driver.execute_script("window.localStorage.clear(); window.sessionStorage.clear(); indexedDB.deleteDatabase('firebaseLocalStorageDb');")
+        self.driver.get("about:blank")
+
     def wait_until_signed_in(self):
         """Waits for LoginPage's post-sign-in redirect."""
         self.wait.until(lambda d: "/login" not in d.current_url)

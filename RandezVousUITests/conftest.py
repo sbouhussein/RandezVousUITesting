@@ -41,6 +41,34 @@ REPORT_RETENTION_COUNT = int(os.getenv("REPORT_RETENTION_COUNT", "20"))
 LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Tests", "logs")
 
 
+# Test categories (run with scripts/run_tests.sh or `pytest -m <name>`), assigned by path so there is one list to edit.
+ACCESS_SUITES = ("suite_Quest_Access_Restrictions", "suite_Quest_Bans", "suite_Domain_Specific_Tests", "suite_Quest_Onboarding_Access")
+ACCESS_TESTS = ("tst_cannot_join_ended_quest", "tst_complete_expired_quest", "tst_complete_domain_restricted_quest")
+UX_SUITES = ("suite_Custom_Quest_Entry_Point", "suite_Quest_Activity", "suite_Quest_Feed", "suite_Quest_Leaderboard")
+PUSH_SUITES = ("suite_Quest_Notifications",)
+SMOKE_TESTS = (
+    "Tests/web/suite_Custom_Quest_Entry_Point/tst_enter_custom_quest_from_homepage/",
+    "Tests/web/suite_Quest_Activity/tst_complete_honor_activity/",
+    "Tests/web/suite_Quest_Activity/tst_complete_quest/",
+    "Tests/ios/suite_Custom_Quest_Entry_Point/tst_Joining_Quest_After_Logging_in/",
+    "Tests/ios/suite_Quest_Activity/tst_Honor_Based_Activity/",
+)
+
+
+def pytest_collection_modifyitems(items):
+    for item in items:
+        path = str(item.fspath).replace("\\", "/")
+        if any(f"/{s}/" in path for s in ACCESS_SUITES) or any(f"/{t}/" in path for t in ACCESS_TESTS):
+            item.add_marker(pytest.mark.access)
+        elif any(f"/{s}/" in path for s in UX_SUITES):
+            item.add_marker(pytest.mark.ux)
+        if any(f"/{s}/" in path for s in PUSH_SUITES):
+            item.add_marker(pytest.mark.push)
+        if any(t in path for t in SMOKE_TESTS):
+            item.add_marker(pytest.mark.smoke)
+
+
+
 def pytest_addoption(parser):
     parser.addoption("--udid", action="store", default="booted", help="UDID of the iOS Simulator")
     parser.addoption("--headless", action="store_true", help="Run the simulator/browser in headless mode")
@@ -477,6 +505,7 @@ def _build_android_chrome_options(serial):
     options.set_capability("browserName", "Chrome")
     options.set_capability("appium:chromedriverAutodownload", True)
     options.set_capability("appium:newCommandTimeout", 120)
+    options.set_capability("appium:uiautomator2ServerLaunchTimeout", 90000)  # a cold emulator is slow to start the server
     return options
 
 
